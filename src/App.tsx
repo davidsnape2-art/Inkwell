@@ -147,28 +147,39 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
       const sorted = data.sort((a, b) => a.order - b.order);
       setChapters(sorted);
       if (sorted.length > 0 && !activeChapter) setActiveChapter(sorted[0]);
+    }, (error) => {
+      console.error("Chapters subscription failed:", error);
     });
   }, [story.id]);
 
   const addChapter = async () => {
-    const newChapter = {
-      storyId: story.id,
-      title: "Unnamed Chapter",
-      content: "",
-      order: chapters.length + 1,
-      authorId: auth.currentUser!.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    const docRef = await addDoc(collection(db, `stories/${story.id}/chapters`), newChapter);
-    setActiveChapter({ ...newChapter, id: docRef.id } as Chapter);
+    try {
+      const newChapter = {
+        storyId: story.id,
+        title: "Unnamed Chapter",
+        content: "",
+        order: chapters.length + 1,
+        authorId: auth.currentUser!.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      const docRef = await addDoc(collection(db, `stories/${story.id}/chapters`), newChapter);
+      setActiveChapter({ ...newChapter, id: docRef.id } as Chapter);
+    } catch (error: any) {
+      console.error("Chapter creation failed:", error);
+      alert(`Could not create chapter: ${error.message || error}`);
+    }
   };
 
   const handleUpdate = async (fields: Partial<Chapter>) => {
     if (!activeChapter) return;
-    const docRef = doc(db, `stories/${story.id}/chapters`, activeChapter.id);
-    await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
-    setActiveChapter(prev => prev ? ({ ...prev, ...fields }) : null);
+    try {
+      const docRef = doc(db, `stories/${story.id}/chapters`, activeChapter.id);
+      await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
+      setActiveChapter(prev => prev ? ({ ...prev, ...fields }) : null);
+    } catch (error: any) {
+      console.error("Chapter update failed:", error);
+    }
   };
 
   const askAi = async () => {
@@ -273,8 +284,13 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
             />
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-earth/20 rounded-2xl border-2 border-dashed border-border-subtle m-10">
-            <p className="font-serif italic text-2xl">Pen a new chapter to begin.</p>
+          <div 
+            onClick={addChapter}
+            className="h-full flex flex-col items-center justify-center text-earth/40 rounded-2xl border-2 border-dashed border-border-subtle m-10 p-12 bg-white/20 hover:bg-white/40 hover:border-sage/40 transition-all cursor-pointer group"
+          >
+            <PenTool className="w-12 h-12 text-earth/20 group-hover:text-sage/60 group-hover:scale-110 transition-all mb-4" />
+            <p className="font-serif italic text-2xl mb-2 group-hover:text-earth transition-colors">Pen a new chapter to begin.</p>
+            <p className="text-xs uppercase tracking-widest text-earth/30 font-bold">Click here to write your first page</p>
           </div>
         )}
       </div>

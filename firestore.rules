@@ -25,17 +25,8 @@ service cloud.firestore {
 
       // Chapters sub-collection
       match /chapters/{chapterId} {
-        // Allow list/get if the user owns the parent story OR if they are the chapter author
-        // Note: checking parent ownership is safer for nested relational integrity
-        allow read: if isOwner(resource.data.authorId) || isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
-
-        allow create: if isSignedIn()
-          && request.resource.data.authorId == request.auth.uid
-          && request.resource.data.storyId == storyId;
-
-        allow update: if isOwner(resource.data.authorId);
-
-        allow delete: if isOwner(resource.data.authorId);
+        // Simple and robust: allow read, create, update, delete if the user owns the parent story
+        allow read, write: if isSignedIn() && isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
       }
     }
 
