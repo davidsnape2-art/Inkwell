@@ -1,0 +1,8 @@
+{
+  "name": "Inkwell",
+  "description": "Collaborative and AI-powered story building platform with chapter management and cloud sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

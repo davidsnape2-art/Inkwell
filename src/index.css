@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Natural Tones Palette */
+  --color-paper: #FDFCF8;
+  --color-sidebar: #F5F2EA;
+  --color-sage: #8A9A5B;
+  --color-sage-light: #B4BC9A;
+  --color-earth: #4A3728;
+  --color-ink: #2D2926;
+  --color-border-subtle: rgba(74, 55, 40, 0.1);
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans;
+  }
+}
+
+.markdown-body h1 { @apply font-serif text-4xl mb-4 font-medium text-earth; }
+.markdown-body h2 { @apply font-serif text-2xl mb-3 font-medium text-earth; }
+.markdown-body p { @apply font-serif text-lg mb-4 leading-[1.8] text-ink; }
+.markdown-body blockquote { @apply border-l-2 border-sage pl-4 italic my-4; }
+
+/* Custom Component Patterns */
+.section-header {
+  @apply text-[11px] uppercase tracking-[1.5px] text-earth opacity-60 font-bold mb-4;
+}
+
+.manuscript-paper {
+  @apply bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-border-subtle rounded-[2px];
+}
+
+.nav-item-natural {
+  @apply px-5 py-3 mx-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer;
+}
+
+.nav-item-active {
+  @apply bg-sage text-white shadow-sm;
+}
+
+.nav-item-hover {
+  @apply hover:bg-sage/10 text-ink/70;
+}

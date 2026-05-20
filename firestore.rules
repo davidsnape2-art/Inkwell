@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Basic helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(authorId) { return isSignedIn() && request.auth.uid == authorId; }
+
+    // Logic for Story documents
+    match /stories/{storyId} {
+      // Allow read if the user is the author
+      allow read: if isOwner(resource.data.authorId);
+      
+      // Allow create if common sense fields are present
+      allow create: if isSignedIn() 
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1;
+
+      // Allow update if ownership is maintained
+      allow update: if isOwner(resource.data.authorId)
+        && request.resource.data.authorId == resource.data.authorId;
+
+      // Allow delete for owners
+      allow delete: if isOwner(resource.data.authorId);
+
+      // Chapters sub-collection
+      match /chapters/{chapterId} {
+        // Allow list/get if the user owns the parent story OR if they are the chapter author
+        // Note: checking parent ownership is safer for nested relational integrity
+        allow read: if isOwner(resource.data.authorId) || isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
+
+        allow create: if isSignedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.storyId == storyId;
+
+        allow update: if isOwner(resource.data.authorId);
+
+        allow delete: if isOwner(resource.data.authorId);
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Story": {
+      "title": "Story",
+      "description": "Main story metadata",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the story" },
+        "description": { "type": "string", "description": "A brief synopsis" },
+        "authorId": { "type": "string", "description": "UID of the author" },
+        "genre": { "type": "string", "description": "Genre of the story" },
+        "coverUrl": { "type": "string", "description": "Optional cover image URL" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "authorId", "createdAt", "updatedAt"]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "A chapter within a story",
+      "type": "object",
+      "properties": {
+        "storyId": { "type": "string", "description": "Reference to the parent story" },
+        "title": { "type": "string", "description": "Chapter title" },
+        "content": { "type": "string", "description": "The actual text content" },
+        "order": { "type": "number", "description": "Numerical sequence of the chapter" },
+        "authorId": { "type": "string", "description": "UID of the author" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storyId", "title", "content", "order", "authorId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/stories/{storyId}": {
+      "schema": "Story",
+      "description": "Collection of user stories"
+    },
+    "/stories/{storyId}/chapters/{chapterId}": {
+      "schema": "Chapter",
+      "description": "Chapters belonging to a specific story"
+    }
+  }
+}
