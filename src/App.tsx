@@ -187,14 +187,47 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     setIsAiLoading(true);
     setAiResult("");
     try {
+      // Create a solid context block defining story properties and scene details
+      const storyContext = `
+Title: ${story.title}
+Genre: ${story.genre || "General Fiction"}
+Description: ${story.description || "No description provided"}
+Active Chapter: ${activeChapter?.title || "Draft"}
+Scene Notes: ${activeChapter?.notes || "No draft notes available"}
+      `.trim();
+
       const prompt = activeChapter?.content 
-        ? `Given this chapter content: "${activeChapter.content.slice(0, 1000)}", what should happen next? Provide 3 twists and 1 character detail.`
-        : `Help me start a story titled "${story.title}" about "${story.description}". Provide 3 opening hooks.`;
-      
-      const { suggestion } = await getAISuggestion(prompt, `${story.title}: ${story.description}`);
+        ? `Review the existing text (current draft length: ${activeChapter.content.length} characters):
+"${activeChapter.content.slice(0, 3000)}"
+
+Develop three highly evocative continuing paths. Organize your suggestions exactly into these matching headings:
+
+### 💫 Chapter Continuations
+Formulate three (3) contrasting lines of action, focusing on sensory feedback, visceral beats, and transitional timing.
+
+### 👤 Character Development
+Expose psychological undertones, active internal conflicts, or relationship tension for the active characters. Provide a snippet of spoken dialogue or direct subtext.
+
+### 🌍 World-Building Elements
+Introduce evocative environment details, setting lore, weather/auditory triggers, or localized setting features to enrich the mood.`
+        : `Let's draft a new manuscript titled "${story.title}" in the genre "${story.genre || "General Fiction"}".
+
+Develop three starting configurations. Organize your suggestions exactly into:
+
+### 💫 Chapter Continuations
+Provide three (3) distinct narrative starts or hooks with high visual imagery and dramatic questions.
+
+### 👤 Character Development
+Define the initial motivation, immediate baggage, and active goals of the characters stepping into this space. Include an atmospheric spoken quote.
+
+### 🌍 World-Building Elements
+Describe 2-3 sensory and physical specifics of the starting setting (specifically mentioning soundscapes, temperature, or lighting) to establish a distinct environment.`;
+
+      const { suggestion } = await getAISuggestion(prompt, storyContext);
       setAiResult(suggestion);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setAiResult("The Ethereal Council is momentarily unreachable. Please verify your connection or your API key configuration in Settings.");
     } finally {
       setIsAiLoading(false);
     }
@@ -318,7 +351,7 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
               animate={{ opacity: 1, scale: 1 }}
               className="bg-white/80 rounded-2xl p-6 border border-border-subtle shadow-sm"
             >
-              <div className="markdown-body text-sm leading-relaxed prose prose-earth">
+              <div className="sidebar-markdown">
                 <ReactMarkdown>{aiResult}</ReactMarkdown>
               </div>
             </motion.div>

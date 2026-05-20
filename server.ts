@@ -26,19 +26,31 @@ async function startServer() {
   app.post("/api/ai/suggest", async (req, res) => {
     try {
       const { prompt, context } = req.body;
-      const systemInstruction = `You are an expert novelist and creative writing partner. Your writing style relies heavily on 'show, don't tell,' rich sensory details (sights, sounds, textures), and realistic dialogue. Avoid melodramatic clichés, cheesy transitions, or rushing to wrap up the narrative too quickly.`;
+      const systemInstruction = `You are an expert novelist, literary director, and creative writing mentor. Your advice is highly specific, avoiding clichéd tropes or generic statements. You prioritize immersive 'show, don't tell' guidance, sensory-rich textures, deep psychological subtext, and atmospheric setting prompts.
+
+Since your response will be rendered in a narrow (300px) sidebar, you MUST format your suggestions precisely according to these rules:
+1. Sizing: Use concise bullet points, short items, and brief paragraphs (1-3 sentences maximum). Avoid long dense blocks of text.
+2. Structure: Follow the requested markdown headers (### 💫 Chapter Continuations, ### 👤 Character Development, ### 🌍 World-Building Elements).
+3. Quotes: Wrap dialogue or monologue examples inside markdown blockquotes (e.g. "> \\"Spoken words...\\"") to visually isolate them.
+4. Dividers: Separate major conceptual sections with horizontal lines (---).`;
       
-      const fullPrompt = `${systemInstruction}
-      
-      Context of current story: ${context || "New story"}
-      User request: ${prompt}
-      Provide creative suggestions, plot twists, or dialogue in markdown format. Keep it concise, inspiring, and evocative.`;
+      const fullPrompt = `STORY BACKGROUND & CONTEXT:
+${context || "No story context available."}
+
+---
+
+DEVELOPMENT DIRECTIVE:
+${prompt}
+
+---
+
+Output the visual, actionable suggestions directly. Do not include conversational preambles or postscripts like "Here are your suggestions." Jump right into the requested markdown sections.`;
 
       const result = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: fullPrompt,
         config: {
-          temperature: 1.3,
+          temperature: 1.1,
         }
       });
       res.json({ suggestion: result.text });
@@ -52,7 +64,7 @@ async function startServer() {
   app.post("/api/ai/review", async (req, res) => {
     try {
       const { content } = req.body;
-      const systemInstruction = `You are a professional literary editor. You analyze narrative structure, character consistency, and thematic depth. You prioritize realistic character motivations and avoid clichés.`;
+      const systemInstruction = `You are a professional literary editor. You analyze narrative structure, character consistency, and thematic depth. You prioritize realistic character motivations and avoid clichés. Use simple markdown with brief sections.`;
 
       const fullPrompt = `${systemInstruction}
 
@@ -60,10 +72,10 @@ async function startServer() {
       Content: ${content}`;
 
       const result = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: fullPrompt,
         config: {
-          temperature: 1.0, // Keep review slightly more grounded
+          temperature: 0.8, // Keep review more grounded
         }
       });
       res.json({ review: result.text });
