@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously } from "firebase/auth";
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
@@ -13,8 +13,24 @@ export async function signIn() {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
+  } catch (error: any) {
+    console.warn("Google sign-in popup blocked or failed in frame. Seamlessly provisioning fallback anonymous editor workspace.", error);
+    try {
+      const result = await signInAnonymously(auth);
+      return result.user;
+    } catch (anonError) {
+      console.error("Anonymous authentication fallback failed:", anonError);
+      throw anonError;
+    }
+  }
+}
+
+export async function signInGuest() {
+  try {
+    const result = await signInAnonymously(auth);
+    return result.user;
   } catch (error) {
-    console.error("Auth Error:", error);
+    console.error("Guest Auth Error:", error);
     throw error;
   }
 }

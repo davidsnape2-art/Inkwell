@@ -12,6 +12,19 @@ import ReactMarkdown from "react-markdown";
 // --- Components ---
 
 function Navbar({ user }: { user: User | null }) {
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    try {
+      await signIn();
+    } catch (err) {
+      console.error("Auth helper failed:", err);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   return (
     <nav className="border-b border-border-subtle py-4 px-6 flex justify-between items-center bg-paper/80 backdrop-blur-md sticky top-0 z-50">
       <div className="flex items-center gap-2">
@@ -21,7 +34,7 @@ function Navbar({ user }: { user: User | null }) {
       <div className="flex items-center gap-4">
         {user ? (
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium opacity-60 hidden sm:block text-earth">{user.displayName}</span>
+            <span className="text-sm font-medium opacity-60 hidden sm:block text-earth">{user.displayName || "Guest Scholar"}</span>
             <button
               onClick={() => auth.signOut()}
               className="flex items-center gap-2 text-sm font-semibold text-earth hover:text-sage transition-colors"
@@ -32,11 +45,12 @@ function Navbar({ user }: { user: User | null }) {
           </div>
         ) : (
           <button
-            onClick={signIn}
-            className="flex items-center gap-2 px-6 py-2 bg-earth text-paper rounded-lg text-sm font-semibold hover:bg-sage transition-all"
+            onClick={handleSignIn}
+            disabled={isSigningIn}
+            className="flex items-center gap-2 px-6 py-2 bg-earth text-paper rounded-lg text-sm font-semibold hover:bg-sage transition-all disabled:opacity-50"
           >
             <LogIn className="w-4 h-4" />
-            Sign In
+            {isSigningIn ? "Signing In..." : "Sign In"}
           </button>
         )}
       </div>
@@ -45,6 +59,19 @@ function Navbar({ user }: { user: User | null }) {
 }
 
 function Landing() {
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleStart = async () => {
+    setIsSigningIn(true);
+    try {
+      await signIn();
+    } catch (err) {
+      console.error("Landing sign-in failed:", err);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-24 text-center">
       <motion.h1
@@ -62,15 +89,26 @@ function Landing() {
       >
         A curated space for authors to craft worlds, organize chapters, and refine manuscripts with the elegance of modern design and AI assistance.
       </motion.p>
-      <motion.button
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2 }}
-        onClick={signIn}
-        className="px-10 py-5 bg-earth text-paper rounded-xl text-lg font-semibold hover:bg-sage transition-all flex items-center gap-3 mx-auto shadow-lg shadow-earth/10"
-      >
-        Start Your Story <ChevronRight className="w-5 h-5" />
-      </motion.button>
+      <div className="flex flex-col items-center gap-3">
+        <motion.button
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          onClick={handleStart}
+          disabled={isSigningIn}
+          className="px-10 py-5 bg-earth text-paper rounded-xl text-lg font-semibold hover:bg-sage transition-all flex items-center gap-3 mx-auto shadow-lg shadow-earth/10 disabled:opacity-50"
+        >
+          {isSigningIn ? "Opening Inkwell..." : "Start Your Story"} <ChevronRight className="w-5 h-5" />
+        </motion.button>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.5 }}
+          transition={{ delay: 0.3 }}
+          className="text-xs font-sans text-earth mt-2"
+        >
+          Supports instant automatic fallback guest workspace if popup is blocked
+        </motion.p>
+      </div>
     </div>
   );
 }
