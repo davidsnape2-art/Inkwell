@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { auth, signIn } from "./lib/firebase";
+import { auth, signIn, signOut, isOfflineMode } from "./lib/firebase";
 import { User } from "firebase/auth";
 import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -11,7 +11,7 @@ import ReactMarkdown from "react-markdown";
 
 // --- Components ---
 
-function Navbar({ user }: { user: User | null }) {
+function Navbar({ user }: { user: any }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   const handleSignIn = async () => {
@@ -32,11 +32,16 @@ function Navbar({ user }: { user: User | null }) {
         <span className="font-serif text-2xl font-light tracking-tight text-earth italic">StorySmith</span>
       </div>
       <div className="flex items-center gap-4">
+        {isOfflineMode && (
+          <span className="text-xs bg-sage/10 text-sage font-mono px-3 py-1 rounded-full animate-pulse border border-sage/20 hidden md:inline-block">
+            Offline Mode
+          </span>
+        )}
         {user ? (
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium opacity-60 hidden sm:block text-earth">{user.displayName || "Guest Scholar"}</span>
             <button
-              onClick={() => auth.signOut()}
+              onClick={() => signOut()}
               className="flex items-center gap-2 text-sm font-semibold text-earth hover:text-sage transition-colors"
             >
               <LogOut className="w-4 h-4" />
@@ -106,7 +111,9 @@ function Landing() {
           transition={{ delay: 0.3 }}
           className="text-xs font-sans text-earth mt-2"
         >
-          Supports instant automatic fallback guest workspace if popup is blocked
+          {isOfflineMode 
+            ? "Offline Mode active: Your manuscripts are securely preserved in your offline local storage."
+            : "Supports instant automatic fallback guest workspace if popup is blocked"}
         </motion.p>
       </div>
     </div>
@@ -176,6 +183,31 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
   useEffect(() => {
     if (!story?.id) return;
+
+    if (isOfflineMode) {
+      const loadChapters = () => {
+        const stored = localStorage.getItem("inkwell_chapters");
+        if (stored) {
+          try {
+            const list = JSON.parse(stored) as Chapter[];
+            const filtered = list.filter(c => c.storyId === story.id);
+            const sorted = filtered.sort((a, b) => a.order - b.order);
+            setChapters(sorted);
+            if (sorted.length > 0 && !activeChapter) setActiveChapter(sorted[0]);
+          } catch (e) {
+            console.error("Failed to parse local chapters", e);
+          }
+        } else {
+          setChapters([]);
+        }
+      };
+      loadChapters();
+      window.addEventListener("inkwell_db_changed", loadChapters);
+      return () => {
+        window.removeEventListener("inkwell_db_changed", loadChapters);
+      };
+    }
+
     const q = query(
       collection(db, `stories/${story.id}/chapters`)
     );
@@ -197,12 +229,25 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
         title: "Unnamed Chapter",
         content: "",
         order: chapters.length + 1,
-        authorId: auth.currentUser!.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        authorId: auth.currentUser?.uid || "local_scribe_guest",
+        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
       };
-      const docRef = await addDoc(collection(db, `stories/${story.id}/chapters`), newChapter);
-      setActiveChapter({ ...newChapter, id: docRef.id } as Chapter);
+
+      let id = "";
+      if (isOfflineMode) {
+        id = "chapter_" + Math.random().toString(36).substring(2, 9);
+        const stored = localStorage.getItem("inkwell_chapters");
+        const list = stored ? JSON.parse(stored) : [];
+        const finalChapter = { ...newChapter, id };
+        list.push(finalChapter);
+        localStorage.setItem("inkwell_chapters", JSON.stringify(list));
+        window.dispatchEvent(new Event("inkwell_db_changed"));
+      } else {
+        const docRef = await addDoc(collection(db, `stories/${story.id}/chapters`), newChapter);
+        id = docRef.id;
+      }
+      setActiveChapter({ ...newChapter, id } as Chapter);
     } catch (error: any) {
       console.error("Chapter creation failed:", error);
       alert(`Could not create chapter: ${error.message || error}`);
@@ -212,8 +257,21 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const handleUpdate = async (fields: Partial<Chapter>) => {
     if (!activeChapter) return;
     try {
-      const docRef = doc(db, `stories/${story.id}/chapters`, activeChapter.id);
-      await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
+      if (isOfflineMode) {
+        const stored = localStorage.getItem("inkwell_chapters");
+        if (stored) {
+          const list = JSON.parse(stored) as Chapter[];
+          const idx = list.findIndex(c => c.id === activeChapter.id);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...fields, updatedAt: { seconds: Date.now() / 1000 } };
+            localStorage.setItem("inkwell_chapters", JSON.stringify(list));
+            window.dispatchEvent(new Event("inkwell_db_changed"));
+          }
+        }
+      } else {
+        const docRef = doc(db, `stories/${story.id}/chapters`, activeChapter.id);
+        await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
+      }
       setActiveChapter(prev => prev ? ({ ...prev, ...fields }) : null);
     } catch (error: any) {
       console.error("Chapter update failed:", error);
@@ -502,12 +560,32 @@ function NewStoryModal({ isOpen, onClose, onCreate }: { isOpen: boolean, onClose
 }
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
+    if (isOfflineMode) {
+      const checkLocalUser = () => {
+        const cached = localStorage.getItem("inkwell_guest_user");
+        if (cached) {
+          try {
+            setUser(JSON.parse(cached));
+          } catch (_) {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      };
+      checkLocalUser();
+      window.addEventListener("storage_auth_changed", checkLocalUser);
+      return () => {
+        window.removeEventListener("storage_auth_changed", checkLocalUser);
+      };
+    }
+
     return auth.onAuthStateChanged((u) => {
       setUser(u);
       if (!u) setSelectedStory(null);
@@ -519,6 +597,33 @@ export default function App() {
       setStories([]);
       return;
     }
+
+    if (isOfflineMode) {
+      const loadStories = () => {
+        const stored = localStorage.getItem("inkwell_stories");
+        if (stored) {
+          try {
+            const list = JSON.parse(stored) as Story[];
+            const filtered = list.filter(s => s.authorId === user.uid);
+            setStories(filtered.sort((a, b) => {
+              const aTime = a.updatedAt?.seconds || 0;
+              const bTime = b.updatedAt?.seconds || 0;
+              return bTime - aTime;
+            }));
+          } catch (e) {
+            console.error("Failed to parse local stories", e);
+          }
+        } else {
+          setStories([]);
+        }
+      };
+      loadStories();
+      window.addEventListener("inkwell_db_changed", loadStories);
+      return () => {
+        window.removeEventListener("inkwell_db_changed", loadStories);
+      };
+    }
+
     // Remove orderBy to avoid index requirement errors
     const q = query(
       collection(db, "stories"),
@@ -539,16 +644,28 @@ export default function App() {
         description: "",
         genre: genre || "General Fiction",
         authorId: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
       };
       
-      const docRef = await addDoc(collection(db, "stories"), newStoryData);
+      let id = "";
+      if (isOfflineMode) {
+        id = "story_" + Math.random().toString(36).substring(2, 9);
+        const stored = localStorage.getItem("inkwell_stories");
+        const list = stored ? JSON.parse(stored) : [];
+        const finalStory = { ...newStoryData, id };
+        list.push(finalStory);
+        localStorage.setItem("inkwell_stories", JSON.stringify(list));
+        window.dispatchEvent(new Event("inkwell_db_changed"));
+      } else {
+        const docRef = await addDoc(collection(db, "stories"), newStoryData);
+        id = docRef.id;
+      }
       
       // Update local state briefly for a smooth transition
       setSelectedStory({ 
         ...newStoryData, 
-        id: docRef.id,
+        id,
         createdAt: { seconds: Date.now() / 1000 },
         updatedAt: { seconds: Date.now() / 1000 }
       } as any);
@@ -556,7 +673,7 @@ export default function App() {
       setIsModalOpen(false);
     } catch (error: any) {
       console.error("Story creation failed:", error);
-      alert(`Permission error or index missing: ${error.message}`);
+      alert(`Story creation failed: ${error.message}`);
     }
   };
 

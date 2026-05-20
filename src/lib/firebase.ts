@@ -3,6 +3,11 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously } from 
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
+// Detect if Firebase configuration is using placeholders
+export const isOfflineMode = !firebaseConfig.apiKey || 
+  firebaseConfig.apiKey.includes("placeholder") || 
+  firebaseConfig.projectId === "test-project-id";
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -10,6 +15,17 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 export async function signIn() {
+  if (isOfflineMode) {
+    const guestUser = {
+      uid: "local_scribe_guest",
+      displayName: "Local Scribe",
+      isAnonymous: true,
+    };
+    localStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
+    window.dispatchEvent(new Event("storage_auth_changed"));
+    return guestUser;
+  }
+
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
@@ -25,7 +41,27 @@ export async function signIn() {
   }
 }
 
+export async function signOut() {
+  if (isOfflineMode) {
+    localStorage.removeItem("inkwell_guest_user");
+    window.dispatchEvent(new Event("storage_auth_changed"));
+    return;
+  }
+  return auth.signOut();
+}
+
 export async function signInGuest() {
+  if (isOfflineMode) {
+    const guestUser = {
+      uid: "local_scribe_guest",
+      displayName: "Local Scribe",
+      isAnonymous: true,
+    };
+    localStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
+    window.dispatchEvent(new Event("storage_auth_changed"));
+    return guestUser;
+  }
+
   try {
     const result = await signInAnonymously(auth);
     return result.user;
@@ -36,6 +72,7 @@ export async function signInGuest() {
 }
 
 async function testConnection() {
+  if (isOfflineMode) return;
   try {
     await getDocFromServer(doc(db, "test", "connection"));
   } catch (error) {
@@ -46,3 +83,4 @@ async function testConnection() {
 }
 
 testConnection();
+
