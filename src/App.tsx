@@ -330,14 +330,33 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
           
           <div className="mt-12">
             <div className="section-header">Scene Notes</div>
-            <div className="bg-white/50 rounded-xl p-5 border border-border-subtle text-xs leading-[1.6] text-earth/60 italic overflow-hidden min-h-[140px]">
-              {activeChapter?.content 
-                ? "The narrative is building. Consider the pacing and the shadows between the lines." 
-                : "A blank page is a garden waiting for seeds."}
-            </div>
-            <div className="mt-4 p-4 border border-dashed border-sage/40 rounded-xl flex items-center justify-center text-[10px] font-bold text-sage uppercase tracking-widest cursor-pointer hover:bg-sage/5 transition-all">
+            {activeChapter ? (
+              <textarea
+                value={activeChapter.notes || ""}
+                onChange={(e) => handleUpdate({ notes: e.target.value })}
+                className="w-full bg-white/50 rounded-xl p-5 border border-border-subtle text-xs leading-[1.6] text-earth/80 focus:outline-none focus:ring-1 focus:ring-sage/40 min-h-[140px] resize-y placeholder:italic placeholder:text-earth/30 font-sans"
+                placeholder="The Oak is a conduit for the old gods. Elara doesn't know she's carrying the catalyst..."
+              />
+            ) : (
+              <div className="bg-white/30 rounded-xl p-5 border border-dashed border-border-subtle text-xs leading-[1.6] text-earth/40 italic text-center font-sans">
+                Select or create a chapter to begin drafting scene notes.
+              </div>
+            )}
+            <button
+              onClick={() => {
+                if (!activeChapter) return;
+                const currentNotes = activeChapter.notes || "";
+                const newNote = currentNotes.trim() 
+                  ? (currentNotes.endsWith("\n") ? currentNotes + "• " : currentNotes + "\n• ") 
+                  : "• ";
+                handleUpdate({ notes: newNote });
+                // Focus the textarea if it can be found or just rely on state update
+              }}
+              disabled={!activeChapter}
+              className="mt-4 w-full p-4 border border-dashed border-sage/40 rounded-xl flex items-center justify-center text-[10px] font-bold text-sage uppercase tracking-widest cursor-pointer hover:bg-sage/5 transition-all disabled:opacity-30 disabled:pointer-events-none"
+            >
                + Add Plot Point
-            </div>
+            </button>
           </div>
         </div>
       </div>
