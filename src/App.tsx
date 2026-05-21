@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import { Story, Chapter, CharacterProfile } from "./types";
-import { cn, getAISuggestion, getAIReview } from "./lib/utils";
+import { cn, getAISuggestion, getAIReview, generateNext } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
 import { jsPDF } from "jspdf";
 
@@ -499,6 +499,28 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  const [isCoWriting, setIsCoWriting] = useState(false);
+
+  const handleCoWriteContinuation = async () => {
+    if (!activeChapter || !activeChapter.content.trim()) return;
+    setIsCoWriting(true);
+    try {
+      const { suggestion } = await generateNext(activeChapter.content);
+      if (suggestion && suggestion.trim()) {
+        const spacer = activeChapter.content.endsWith("\n") 
+          ? (activeChapter.content.endsWith("\n\n") ? "" : "\n") 
+          : "\n\n";
+        const contentUpdate = activeChapter.content + spacer + suggestion.trim();
+        await handleUpdate({ content: contentUpdate });
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to continue your story. Please verify your connection.");
+    } finally {
+      setIsCoWriting(false);
+    }
+  };
   
   const [activeTab, setActiveTab] = useState<"muse" | "checker" | "characters">("muse");
   const [isReviewLoading, setIsReviewLoading] = useState(false);
@@ -1062,9 +1084,35 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
             <textarea
               value={activeChapter.content}
               onChange={(e) => handleUpdate({ content: e.target.value })}
-              className="font-serif text-xl w-full flex-1 bg-transparent resize-none leading-[1.8] focus:outline-none text-ink placeholder:text-ink/20"
+              className="font-serif text-xl w-full flex-1 bg-transparent resize-none leading-[1.8] focus:outline-none text-ink placeholder:text-ink/20 focus:ring-0"
               placeholder="The words began to flow like a river..."
             />
+            
+            {/* Elite Co-Writer action bar */}
+            <div className="mt-8 pt-6 border-t border-earth/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-earth/50 font-mono flex items-center gap-1.5">
+                <PenTool className="w-3.5 h-3.5 text-sage" />
+                <span>{activeChapter.content ? activeChapter.content.trim().split(/\s+/).filter(Boolean).length : 0} words</span>
+              </div>
+              
+              <button
+                onClick={handleCoWriteContinuation}
+                disabled={isCoWriting || !activeChapter.content.trim()}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-earth hover:bg-sage text-paper rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-40 hover:shadow-lg hover:shadow-sage/15"
+              >
+                {isCoWriting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Mimicking your style...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Seamless Elite Co-Writer Continuation</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         ) : (
           <div 

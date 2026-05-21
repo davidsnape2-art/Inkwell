@@ -22,6 +22,44 @@ async function startServer() {
 
   app.use(express.json());
 
+  // API Route: Elite Co-Writer Continuation (Seamless text flow)
+  app.post("/api/generate-next", async (req, res) => {
+    try {
+      const { currentText } = req.body;
+
+      const systemInstruction = (
+        "You are Inkwell's Elite Co-Writer. Your job is to seamlessly continue the user's story. " +
+        "Mimic their voice, cadence, and tone precisely. Focus on sensory details. " +
+        "Do not include any conversational filler, intro remarks, or formatting like 'Here is the next paragraph'. " +
+        "Output ONLY the raw story text."
+      );
+
+      const prompt = `
+<context>
+Continue the scene smoothly. Write exactly one robust paragraph. Do not rush the plot or skip ahead in time.
+</context>
+
+<draft>
+${currentText || ""}
+</draft>
+      `.trim();
+
+      const result = await genAI.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        }
+      });
+
+      res.json({ suggestion: result.text || "" });
+    } catch (error) {
+      console.error("Gemini Co-Writer Error:", error);
+      res.status(500).json({ error: "Failed to generate continuation" });
+    }
+  });
+
   // API Route: AI Story Assistance
   app.post("/api/ai/suggest", async (req, res) => {
     try {

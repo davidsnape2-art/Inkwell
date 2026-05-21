@@ -24,3 +24,13 @@ export async function getAIReview(content: string, context?: string) {
   if (!response.ok) throw new Error("AI failed");
   return response.json();
 }
+
+export async function generateNext(currentText: string) {
+  const response = await fetch("/api/generate-next", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentText }),
+  });
+  if (!response.ok) throw new Error("Co-Writer failed");
+  return response.json();
+}
