@@ -25,24 +25,33 @@ async function startServer() {
   // API Route: Elite Co-Writer Continuation (Seamless text flow)
   app.post("/api/generate-next", async (req, res) => {
     try {
-      const { currentText } = req.body;
+      const { currentText, note } = req.body;
+
+      if (!currentText) {
+        return res.status(400).json({ error: "Text context is required." });
+      }
 
       const systemInstruction = (
         "You are Inkwell's Elite Co-Writer. Your job is to seamlessly continue the user's story. " +
-        "Mimic their voice, cadence, and tone precisely. Focus on sensory details. " +
-        "Do not include any conversational filler, intro remarks, or formatting like 'Here is the next paragraph'. " +
-        "Output ONLY the raw story text."
+        "Mimic their voice, cadence, sentence structures, and tone precisely. Focus deeply on sensory " +
+        "details and internal tracking of thoughts. Do not include any conversational filler, " +
+        "introductory phrases, or markdown headers. Output ONLY the raw story prose."
       );
+
+      let contextBlock = "Continue the scene smoothly. Write exactly one robust paragraph. Do not rush the plot, stay in the current moment.";
+      if (note && note.trim().length > 0) {
+        contextBlock += `\n\nCRITICAL DIRECTION: You must incorporate the following plot beat, action, or environmental change seamlessly into this paragraph: "${note}"`;
+      }
 
       const prompt = `
 <context>
-Continue the scene smoothly. Write exactly one robust paragraph. Do not rush the plot or skip ahead in time.
+${contextBlock}
 </context>
 
 <draft>
-${currentText || ""}
+${currentText}
 </draft>
-      `.trim();
+`.trim();
 
       const result = await genAI.models.generateContent({
         model: "gemini-3.5-flash",
@@ -50,7 +59,7 @@ ${currentText || ""}
         config: {
           systemInstruction,
           temperature: 0.75,
-          maxOutputTokens: 300,
+          maxOutputTokens: 350,
         }
       });
 

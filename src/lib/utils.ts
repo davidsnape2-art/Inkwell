@@ -25,11 +25,11 @@ export async function getAIReview(content: string, context?: string) {
   return response.json();
 }
 
-export async function generateNext(currentText: string) {
+export async function generateNext(currentText: string, note?: string) {
   const response = await fetch("/api/generate-next", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ currentText }),
+    body: JSON.stringify({ currentText, note }),
   });
   if (!response.ok) throw new Error("Co-Writer failed");
   return response.json();

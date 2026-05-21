@@ -500,19 +500,21 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [aiResult, setAiResult] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
+  const [directorsNote, setDirectorsNote] = useState("");
   const [isCoWriting, setIsCoWriting] = useState(false);
 
   const handleCoWriteContinuation = async () => {
     if (!activeChapter || !activeChapter.content.trim()) return;
     setIsCoWriting(true);
     try {
-      const { suggestion } = await generateNext(activeChapter.content);
+      const { suggestion } = await generateNext(activeChapter.content, directorsNote.trim());
       if (suggestion && suggestion.trim()) {
         const spacer = activeChapter.content.endsWith("\n") 
           ? (activeChapter.content.endsWith("\n\n") ? "" : "\n") 
           : "\n\n";
         const contentUpdate = activeChapter.content + spacer + suggestion.trim();
         await handleUpdate({ content: contentUpdate });
+        setDirectorsNote("");
       }
     } catch (err) {
       console.error(err);
@@ -1089,29 +1091,46 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
             />
             
             {/* Elite Co-Writer action bar */}
-            <div className="mt-8 pt-6 border-t border-earth/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-xs text-earth/50 font-mono flex items-center gap-1.5">
-                <PenTool className="w-3.5 h-3.5 text-sage" />
-                <span>{activeChapter.content ? activeChapter.content.trim().split(/\s+/).filter(Boolean).length : 0} words</span>
+            <div className="mt-8 pt-6 border-t border-earth/10 flex flex-col gap-5">
+              {/* Optional Director's Note guidance */}
+              <div className="bg-white/[0.4] backdrop-blur-xs border border-earth/5 hover:border-earth/10 rounded-xl p-4 transition-all duration-300 flex flex-col gap-2 shadow-xs group">
+                <label className="text-[10px] font-sans font-extrabold uppercase tracking-widest text-earth/50 group-focus-within:text-sage transition-colors flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sage inline-block animate-pulse"></span>
+                  Director's Note (Optional guidance for next paragraph)
+                </label>
+                <input
+                  type="text"
+                  value={directorsNote}
+                  onChange={(e) => setDirectorsNote(e.target.value)}
+                  placeholder="e.g., A sudden downpour starts, or Brian checks his mirrors nervously..."
+                  className="w-full bg-transparent text-sm font-sans placeholder:text-earth/25 focus:outline-none text-earth border-b border-earth/10 focus:border-sage/40 pb-1 transition-all"
+                />
               </div>
-              
-              <button
-                onClick={handleCoWriteContinuation}
-                disabled={isCoWriting || !activeChapter.content.trim()}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-earth hover:bg-sage text-paper rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-40 hover:shadow-lg hover:shadow-sage/15"
-              >
-                {isCoWriting ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Mimicking your style...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Seamless Elite Co-Writer Continuation</span>
-                  </>
-                )}
-              </button>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-xs text-earth/50 font-mono flex items-center gap-1.5">
+                  <PenTool className="w-3.5 h-3.5 text-sage" />
+                  <span>{activeChapter.content ? activeChapter.content.trim().split(/\s+/).filter(Boolean).length : 0} words</span>
+                </div>
+                
+                <button
+                  onClick={handleCoWriteContinuation}
+                  disabled={isCoWriting || !activeChapter.content.trim()}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-earth hover:bg-sage text-paper rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-40 hover:shadow-lg hover:shadow-sage/15"
+                >
+                  {isCoWriting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Mimicking your style...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Seamless Elite Co-Writer Continuation</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ) : (
