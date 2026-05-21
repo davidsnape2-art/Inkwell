@@ -15,11 +15,11 @@ export async function getAISuggestion(prompt: string, context?: string) {
   return response.json();
 }
 
-export async function getAIReview(content: string) {
+export async function getAIReview(content: string, context?: string) {
   const response = await fetch("/api/ai/review", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, context }),
   });
   if (!response.ok) throw new Error("AI failed");
   return response.json();

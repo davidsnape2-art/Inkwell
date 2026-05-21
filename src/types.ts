@@ -17,6 +17,7 @@ export interface Chapter {
   order: number;
   authorId: string;
   notes?: string;
+  review?: string;
   createdAt: any;
   updatedAt: any;
 }

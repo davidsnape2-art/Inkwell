@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { auth, signIn, signOut, isOfflineMode } from "./lib/firebase";
 import { User } from "firebase/auth";
-import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus } from "lucide-react";
+import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import { Story, Chapter } from "./types";
-import { cn, getAISuggestion } from "./lib/utils";
+import { cn, getAISuggestion, getAIReview } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
 
 // --- Components ---
@@ -180,6 +180,21 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  const [activeTab, setActiveTab] = useState<"muse" | "checker">("muse");
+  const [isReviewLoading, setIsReviewLoading] = useState(false);
+  const [reviewLoadingStep, setReviewLoadingStep] = useState(0);
+
+  useEffect(() => {
+    if (!isReviewLoading) {
+      setReviewLoadingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setReviewLoadingStep((prev) => (prev + 1) % 5);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isReviewLoading]);
 
   useEffect(() => {
     if (!story?.id) return;
@@ -329,6 +344,28 @@ Describe 2-3 sensory and physical specifics of the starting setting (specificall
     }
   };
 
+  const checkPlotHoles = async () => {
+    if (!activeChapter || !activeChapter.content.trim()) return;
+    setIsReviewLoading(true);
+    try {
+      const storyContext = `
+Story Title: ${story.title}
+Story Genre: ${story.genre || "General Fiction"}
+Story Description: ${story.description || "No description provided"}
+Active Chapter Title: ${activeChapter.title || "Unnamed Chapter"}
+Chapter Notes: ${activeChapter.notes || "No draft notes available"}
+      `.trim();
+
+      const { review } = await getAIReview(activeChapter.content, storyContext);
+      await handleUpdate({ review });
+    } catch (err) {
+      console.error(err);
+      alert("Could not request plot hole check. Please verify your connection.");
+    } finally {
+      setIsReviewLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-paper">
       {/* Sidebar Left */}
@@ -426,38 +463,168 @@ Describe 2-3 sensory and physical specifics of the starting setting (specificall
 
       {/* Sidebar Right - AI & Notes */}
       <div className="w-80 border-l border-border-subtle bg-sidebar p-8 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 mb-8">
-          <Sparkles className="w-4 h-4 text-sage" />
-          <h4 className="section-header uppercase mb-0">Ethereal Council (AI)</h4>
+        {/* Navigation Tabs */}
+        <div className="flex items-center justify-between border-b border-border-subtle mb-6 pb-2">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab("muse")}
+              className={cn(
+                "text-xs uppercase tracking-wider font-bold pb-2 transition-all border-b-2",
+                activeTab === "muse"
+                  ? "border-sage text-sage"
+                  : "border-transparent text-earth/30 hover:text-earth/60"
+              )}
+            >
+              Muse
+            </button>
+            <button
+              onClick={() => setActiveTab("checker")}
+              className={cn(
+                "text-xs uppercase tracking-wider font-bold pb-2 transition-all border-b-2 flex items-center gap-1.5",
+                activeTab === "checker"
+                  ? "border-sage text-sage"
+                  : "border-transparent text-earth/30 hover:text-earth/60"
+              )}
+            >
+              Plot Audit
+            </button>
+          </div>
+          <Sparkles className="w-3.5 h-3.5 text-sage/60" />
         </div>
 
-        <button
-          onClick={askAi}
-          disabled={isAiLoading}
-          className="w-full py-4 bg-earth text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sage transition-all mb-8 disabled:opacity-50 shadow-md shadow-earth/10"
-        >
-          {isAiLoading ? "Consulting..." : "Invoke Muse"}
-          <Sparkles className="w-4 h-4" />
-        </button>
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
+          {activeTab === "muse" ? (
+            <div className="space-y-6">
+              <button
+                onClick={askAi}
+                disabled={isAiLoading}
+                className="w-full py-4 bg-earth text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sage transition-all disabled:opacity-50 shadow-md shadow-earth/10"
+              >
+                {isAiLoading ? "Consulting..." : "Invoke Muse"}
+                <Sparkles className="w-4 h-4" />
+              </button>
 
-        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-          {aiResult ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white/80 rounded-2xl p-6 border border-border-subtle shadow-sm"
-            >
-              <div className="sidebar-markdown">
-                <ReactMarkdown>{aiResult}</ReactMarkdown>
-              </div>
-            </motion.div>
+              {aiResult ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white/80 rounded-2xl p-6 border border-border-subtle shadow-sm animate-fade-in"
+                >
+                  <div className="sidebar-markdown">
+                    <ReactMarkdown>{aiResult}</ReactMarkdown>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="text-center py-16 px-6 border border-dashed border-border-subtle rounded-2xl bg-paper/30 animate-fade-in">
+                  <BookOpen className="w-5 h-5 text-earth/20 mx-auto mb-3" />
+                  <div className="text-[10px] font-bold text-earth/40 uppercase tracking-[2px] leading-relaxed">
+                    Tap Muse to spark continuing paths or start hooks
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
-            <div className="text-center py-20 px-6 border border-dashed border-border-subtle rounded-2xl bg-paper/30">
-               <div className="text-xs font-bold text-earth/30 uppercase tracking-[2px]">Suggestions will appear here</div>
+            <div className="space-y-6 animate-fade-in">
+              {!activeChapter ? (
+                <div className="text-center py-16 px-6 border border-dashed border-border-subtle rounded-2xl bg-paper/30">
+                  <Eye className="w-5 h-5 text-earth/20 mx-auto mb-3" />
+                  <div className="text-[10px] font-bold text-earth/40 uppercase tracking-[2px]">
+                    Select a chapter to run a plot audit
+                  </div>
+                </div>
+              ) : !activeChapter.content.trim() ? (
+                <div className="text-center py-16 px-6 border border-dashed border-border-subtle rounded-2xl bg-paper/30">
+                  <PenTool className="w-5 h-5 text-earth/20 mx-auto mb-3" />
+                  <div className="text-[10px] font-bold text-earth/40 uppercase tracking-[2px] leading-relaxed">
+                    Write chapter content to run a plot hole audit
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <button
+                    onClick={checkPlotHoles}
+                    disabled={isReviewLoading}
+                    className="w-full py-4 bg-sage text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-earth transition-all disabled:opacity-50 shadow-md shadow-sage/10"
+                  >
+                    {isReviewLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Auditing...
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4" />
+                        Audit Plot Holes
+                      </>
+                    )}
+                  </button>
+
+                  {isReviewLoading ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white/55 border border-border-subtle rounded-2xl p-6 text-center space-y-4 shadow-sm"
+                    >
+                      <div className="flex justify-center">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sage opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-sage"></span>
+                        </span>
+                      </div>
+                      <p className="text-xs text-earth/70 font-medium font-serif italic min-h-[40px] duration-500 transition-all flex items-center justify-center">
+                        {reviewLoadingStep === 0 && "Submitting draft to the editor..."}
+                        {reviewLoadingStep === 1 && "Verifying timeline consistency & plot holes..."}
+                        {reviewLoadingStep === 2 && "Evaluating psychological character motivations..."}
+                        {reviewLoadingStep === 3 && "Analyzing narrative theme & motifs..."}
+                        {reviewLoadingStep === 4 && "Formatting constructive recommendations..."}
+                      </p>
+                      <div className="w-full bg-earth/10 h-1.5 rounded-full overflow-hidden">
+                        <motion.div
+                          className="bg-sage h-full rounded-full"
+                          initial={{ width: "0%" }}
+                          animate={{ width: `${(reviewLoadingStep + 1) * 20}%` }}
+                          transition={{ duration: 0.5 }}
+                        />
+                      </div>
+                    </motion.div>
+                  ) : activeChapter.review ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="space-y-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-sage tracking-widest flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-sage" /> Latest Critique
+                        </span>
+                        <button
+                          onClick={checkPlotHoles}
+                          className="text-[10px] text-earth/50 hover:text-earth transition-colors flex items-center gap-1"
+                          title="Re-run analysis"
+                        >
+                          <RefreshCw className="w-2.5 h-2.5" /> Re-audit
+                        </button>
+                      </div>
+                      <div className="bg-white/85 rounded-2xl p-6 border border-border-subtle shadow-sm">
+                        <div className="sidebar-markdown leading-relaxed">
+                          <ReactMarkdown>{activeChapter.review}</ReactMarkdown>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <div className="text-center py-16 px-6 border border-dashed border-border-subtle rounded-2xl bg-paper/30">
+                      <AlertTriangle className="w-5 h-5 text-earth/20 mx-auto mb-3" />
+                      <div className="text-[10px] font-bold text-earth/40 uppercase tracking-[2px] leading-relaxed">
+                        No previous audit found. Run an audit to outline mistakes, motivations, and thematic gaps.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
-          
-          <div className="mt-12">
+
+          <div className="pt-4 border-t border-border-subtle">
             <div className="section-header">Scene Notes</div>
             {activeChapter ? (
               <textarea
@@ -475,8 +642,8 @@ Describe 2-3 sensory and physical specifics of the starting setting (specificall
               onClick={() => {
                 if (!activeChapter) return;
                 const currentNotes = activeChapter.notes || "";
-                const newNote = currentNotes.trim() 
-                  ? (currentNotes.endsWith("\n") ? currentNotes + "• " : currentNotes + "\n• ") 
+                const newNote = currentNotes.trim()
+                  ? (currentNotes.endsWith("\n") ? currentNotes + "• " : currentNotes + "\n• ")
                   : "• ";
                 handleUpdate({ notes: newNote });
                 // Focus the textarea if it can be found or just rely on state update
@@ -484,7 +651,7 @@ Describe 2-3 sensory and physical specifics of the starting setting (specificall
               disabled={!activeChapter}
               className="mt-4 w-full p-4 border border-dashed border-sage/40 rounded-xl flex items-center justify-center text-[10px] font-bold text-sage uppercase tracking-widest cursor-pointer hover:bg-sage/5 transition-all disabled:opacity-30 disabled:pointer-events-none"
             >
-               + Add Plot Point
+              + Add Plot Point
             </button>
           </div>
         </div>

@@ -63,25 +63,48 @@ Output the visual, actionable suggestions directly. Do not include conversationa
   // API Route: AI Plot Hole Checker
   app.post("/api/ai/review", async (req, res) => {
     try {
-      const { content } = req.body;
-      const systemInstruction = `You are a professional literary editor. You analyze narrative structure, character consistency, and thematic depth. You prioritize realistic character motivations and avoid clichés. Use simple markdown with brief sections.`;
+      const { content, context } = req.body;
+      const systemInstruction = `You are an elite literary critic, structural editor, and plot theorist. Your critique is sharp, professional, incredibly helpful, and constructive. You avoid superficial praise, jumping straight into pinpointing potential structural failures.
 
-      const fullPrompt = `${systemInstruction}
+You MUST structure your feedback under the following four markdown headers:
+### 🔍 Continuity & Inconsistencies
+Verify factual cohesion: temporal offsets, logic flips, sudden object disappearance/reappearance, or sequence errors.
 
-      Review the following story segment and identify potential plot holes, character inconsistencies, or areas for improvement. Provide constructive, sophisticated feedback in markdown format.
-      Content: ${content}`;
+### 👤 Character Motivations
+Audit psychological realism: checking for actions that feel forced, dialogue that violates established trauma/goals, or scenes where physical acts lack internal triggers.
+
+### 💭 Thematic Weaknesses
+Analyze the artistic weight: checking if themes feel unearned, if symbols or motifs are used superficially without narrative evolution, or if tone drifts away.
+
+### 💡 Constructive Recommendations
+Provide 2-3 specific, highly actionable rewrite avenues or subplots to weave in.
+
+Use horizontal lines (---) to divide major sections and use elegant, literary phrasing. Since the response is displayed in a narrow (300px) widget, keep paragraphs brief and bullet points punchy.`;
+
+      const fullPrompt = `STORY BACKGROUND & OVERVIEW:
+${context || "No overall story overview."}
+
+---
+
+CHAPTER CONTENT TO AUDIT:
+"${content}"
+
+---
+
+Please run a deep plot hole, motivation, and thematic review on the above chapter content.`;
 
       const result = await genAI.models.generateContent({
         model: "gemini-3.5-flash",
         contents: fullPrompt,
         config: {
-          temperature: 0.8, // Keep review more grounded
+          systemInstruction,
+          temperature: 0.85, // Keep review grounded but insightful for critical analysis
         }
       });
       res.json({ review: result.text });
     } catch (error) {
       console.error("Gemini Error:", error);
-      res.status(500).json({ error: "Failed to review content" });
+      res.status(500).json({ error: "Failed to audit plot holes" });
     }
   });
 
