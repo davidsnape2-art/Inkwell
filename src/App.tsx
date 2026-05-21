@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { auth, signIn, signOut, isOfflineMode } from "./lib/firebase";
 import { User } from "firebase/auth";
 import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers, Check, Users, UserPlus, FileText, Download } from "lucide-react";
@@ -9,6 +9,10 @@ import { Story, Chapter, CharacterProfile } from "./types";
 import { cn, getAISuggestion, getAIReview, generateNext, modifySelection } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
 import { jsPDF } from "jspdf";
+import { useEditor, EditorContent } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
 
 // --- Components ---
 
@@ -503,24 +507,75 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [directorsNote, setDirectorsNote] = useState("");
   const [isCoWriting, setIsCoWriting] = useState(false);
 
-  const [selection, setSelection] = useState({ start: 0, end: 0, text: "" });
   const [isModifyingSelection, setIsModifyingSelection] = useState(false);
   const [selectedAction, setSelectedAction] = useState<"enhance" | "pacing" | "dialogue" | "">("");
 
+  // Helper to convert plain text with custom newlines to html for Tiptap
+  const textToHtml = (text: string): string => {
+    if (!text) return "";
+    return text
+      .split(/\n\n+/)
+      .map(p => {
+        const cleaned = p.trim();
+        if (!cleaned) return "";
+        return `<p>${cleaned.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />")}</p>`;
+      })
+      .filter(Boolean)
+      .join("");
+  };
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder: "The words began to flow like a river...",
+      }),
+    ],
+    content: "",
+    onUpdate: ({ editor }) => {
+      const plainText = editor.getText({ blockSeparator: "\n\n" });
+      handleUpdate({ content: plainText });
+    },
+    editorProps: {
+      attributes: {
+        class: "prose max-w-none focus:outline-none font-serif text-xl leading-[1.8] text-ink min-h-[350px]",
+        style: "outline: none;",
+      },
+    },
+  });
+
+  const lastActiveChapterIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (editor && activeChapter) {
+      if (lastActiveChapterIdRef.current !== activeChapter.id) {
+        lastActiveChapterIdRef.current = activeChapter.id;
+        const htmlContent = textToHtml(activeChapter.content || "");
+        editor.commands.setContent(htmlContent);
+      }
+    } else if (editor && !activeChapter) {
+      lastActiveChapterIdRef.current = null;
+      editor.commands.clearContent();
+    }
+  }, [editor, activeChapter?.id]);
+
   const handleModifySelection = async (action: "enhance" | "pacing" | "dialogue") => {
-    if (!activeChapter || !selection.text.trim() || isModifyingSelection) return;
+    if (!editor || isModifyingSelection) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, " ");
+    
+    if (!selectedText.trim()) return;
     setIsModifyingSelection(true);
     setSelectedAction(action);
     try {
-      const { replacement } = await modifySelection(activeChapter.content, selection.text, action);
+      const fullText = editor.getText({ blockSeparator: "\n\n" });
+      const { replacement } = await modifySelection(fullText, selectedText, action);
       if (replacement) {
-        const updatedContent = 
-          activeChapter.content.substring(0, selection.start) + 
-          replacement + 
-          activeChapter.content.substring(selection.end);
+        editor.chain().focus().insertContentAt({ from, to }, replacement.trim()).run();
+        
+        // Push update to parent & database
+        const updatedContent = editor.getText({ blockSeparator: "\n\n" });
         await handleUpdate({ content: updatedContent });
-        // Clear selection state
-        setSelection({ start: 0, end: 0, text: "" });
       }
     } catch (err) {
       console.error(err);
@@ -532,17 +587,19 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   };
 
   const handleCoWriteContinuation = async () => {
-    if (!activeChapter || !activeChapter.content.trim()) return;
+    if (!editor || !activeChapter) return;
+    const currentText = editor.getText({ blockSeparator: "\n\n" });
+    if (!currentText.trim()) return;
     setIsCoWriting(true);
     try {
-      const { suggestion } = await generateNext(activeChapter.content, directorsNote.trim());
+      const { suggestion } = await generateNext(currentText, directorsNote.trim());
       if (suggestion && suggestion.trim()) {
-        const spacer = activeChapter.content.endsWith("\n") 
-          ? (activeChapter.content.endsWith("\n\n") ? "" : "\n") 
-          : "\n\n";
-        const contentUpdate = activeChapter.content + spacer + suggestion.trim();
-        await handleUpdate({ content: contentUpdate });
+        editor.chain().focus("end").insertContent(`<p>${suggestion.trim()}</p>`).run();
         setDirectorsNote("");
+        
+        // Push update to database
+        const updatedContent = editor.getText({ blockSeparator: "\n\n" });
+        await handleUpdate({ content: updatedContent });
       }
     } catch (err) {
       console.error(err);
@@ -1111,123 +1168,72 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
               placeholder="Chapter Title..."
             />
             
-            <textarea
-              value={activeChapter.content}
-              onChange={(e) => handleUpdate({ content: e.target.value })}
-              onSelect={(e) => {
-                const target = e.currentTarget;
-                const start = target.selectionStart;
-                const end = target.selectionEnd;
-                if (start !== end) {
-                  const selected = target.value.substring(start, end);
-                  setSelection({ start, end, text: selected });
-                } else {
-                  setSelection({ start: 0, end: 0, text: "" });
-                }
-              }}
-              className="font-serif text-xl w-full flex-1 bg-transparent resize-none leading-[1.8] focus:outline-none text-ink placeholder:text-ink/20 focus:ring-0 min-h-[350px]"
-              placeholder="The words began to flow like a river..."
-            />
+            {editor && (
+              <BubbleMenu
+                editor={editor}
+                options={{ placement: "top" }}
+              >
+                <div className="flex bg-earth/95 backdrop-blur-md rounded-xl p-1.5 shadow-xl border border-earth/20 gap-1">
+                  <button
+                    onClick={() => handleModifySelection("enhance")}
+                    disabled={isModifyingSelection}
+                    className="px-3.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-sans font-bold uppercase tracking-wider text-paper hover:bg-sage transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isModifyingSelection && selectedAction === "enhance" ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Refining...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3" />
+                        <span>Sensory & Atmos</span>
+                      </>
+                    )}
+                  </button>
 
-            {/* Inkwell Master Editor Inline Refinement Panel */}
-            <AnimatePresence>
-              {selection.text.trim().length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="mt-6 p-5 bg-sage/5 border border-sage/20 rounded-2xl flex flex-col gap-4 shadow-xs relative overflow-hidden"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-sans font-extrabold uppercase tracking-widest text-sage flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-sage inline-block animate-pulse"></span>
-                      Inkwell Master Editor
-                    </span>
-                    <button
-                      onClick={() => setSelection({ start: 0, end: 0, text: "" })}
-                      className="text-[10px] font-sans font-bold uppercase tracking-wider text-earth/30 hover:text-earth transition-colors"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleModifySelection("pacing")}
+                    disabled={isModifyingSelection}
+                    className="px-3.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-sans font-bold uppercase tracking-wider text-paper hover:bg-sage transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isModifyingSelection && selectedAction === "pacing" ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Pacing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Narrative Pacing</span>
+                      </>
+                    )}
+                  </button>
 
-                  <div className="text-xs text-earth/60 font-serif italic border-l-2 border-sage/30 pl-3 leading-relaxed max-h-24 overflow-y-auto whitespace-pre-wrap">
-                    "{selection.text}"
-                  </div>
+                  <button
+                    onClick={() => handleModifySelection("dialogue")}
+                    disabled={isModifyingSelection}
+                    className="px-3.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-sans font-bold uppercase tracking-wider text-paper hover:bg-sage transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isModifyingSelection && selectedAction === "dialogue" ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Speech...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PenTool className="w-3 h-3" />
+                        <span>Spoken Dialogue</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </BubbleMenu>
+            )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                    <button
-                      disabled={isModifyingSelection}
-                      onClick={() => handleModifySelection("enhance")}
-                      className={cn(
-                        "flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[10px] uppercase tracking-wider font-bold transition-all border",
-                        selectedAction === "enhance"
-                          ? "bg-sage text-white border-sage/40"
-                          : "bg-white hover:bg-sage/5 hover:text-sage text-earth/80 border-earth/10 hover:border-sage/20"
-                      )}
-                    >
-                      {isModifyingSelection && selectedAction === "enhance" ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Sensory Refine...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3.5 h-3.5 text-sage" />
-                          <span>Sensory & Atmos</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      disabled={isModifyingSelection}
-                      onClick={() => handleModifySelection("pacing")}
-                      className={cn(
-                        "flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[10px] uppercase tracking-wider font-bold transition-all border",
-                        selectedAction === "pacing"
-                          ? "bg-sage text-white border-sage/40"
-                          : "bg-white hover:bg-sage/5 hover:text-sage text-earth/80 border-earth/10 hover:border-sage/20"
-                      )}
-                    >
-                      {isModifyingSelection && selectedAction === "pacing" ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Pacing Refine...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 text-sage" />
-                          <span>Narrative Pacing</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      disabled={isModifyingSelection}
-                      onClick={() => handleModifySelection("dialogue")}
-                      className={cn(
-                        "flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[10px] uppercase tracking-wider font-bold transition-all border",
-                        selectedAction === "dialogue"
-                          ? "bg-sage text-white border-sage/40"
-                          : "bg-white hover:bg-sage/5 hover:text-sage text-earth/80 border-earth/10 hover:border-sage/20"
-                      )}
-                    >
-                      {isModifyingSelection && selectedAction === "dialogue" ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Speech Refine...</span>
-                        </>
-                      ) : (
-                        <>
-                          <PenTool className="w-3.5 h-3.5 text-sage" />
-                          <span>Spoken Dialogue</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="font-serif text-xl w-full flex-1 bg-transparent leading-[1.8] text-ink min-h-[350px] outline-none">
+              <EditorContent editor={editor} />
+            </div>
             
             {/* Elite Co-Writer action bar */}
             <div className="mt-8 pt-6 border-t border-earth/10 flex flex-col gap-5">

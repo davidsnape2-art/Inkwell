@@ -73,3 +73,21 @@
 .sidebar-markdown hr {
   @apply border-t border-border-subtle my-5;
 }
+
+/* TipTap Editor Workspace Styling */
+.ProseMirror {
+  @apply font-serif text-xl leading-[1.8] text-ink min-h-[350px] outline-none;
+}
+
+.ProseMirror p {
+  @apply mb-5;
+}
+
+/* TipTap Placeholder Styling */
+.ProseMirror p.is-empty::before {
+  color: rgba(45, 41, 38, 0.25);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
