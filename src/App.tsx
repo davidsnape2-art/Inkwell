@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { auth, signIn, signOut, isOfflineMode } from "./lib/firebase";
 import { User } from "firebase/auth";
-import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers, Check, Users, UserPlus } from "lucide-react";
+import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers, Check, Users, UserPlus, FileText, Download } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import { Story, Chapter, CharacterProfile } from "./types";
 import { cn, getAISuggestion, getAIReview } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
+import { jsPDF } from "jspdf";
 
 // --- Components ---
 
@@ -189,6 +190,142 @@ function AddCharacterForm({ onAdd }: { onAdd: (name: string, role: string, trait
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ReadabilityAnalysis({ content }: { content: string }) {
+  if (!content || !content.trim()) {
+    return (
+      <div className="bg-white/40 border border-border-subtle rounded-2xl p-6 text-center">
+        <PenTool className="w-5 h-5 text-earth/20 mx-auto mb-2" />
+        <p className="text-[10px] font-bold text-earth/40 uppercase tracking-[2px] leading-relaxed">
+          Draft prose to calculate readability metrics
+        </p>
+      </div>
+    );
+  }
+
+  // Count words
+  const words = content.trim().split(/\s+/).filter(w => w.length > 0);
+  const wordCount = words.length;
+
+  // Let's count alphanumeric characters
+  const charCount = content.replace(/\s/g, "").length;
+
+  // Count sentences
+  const sentences = content
+    .split(/[.!?]+(?:\s+|$)/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+  const sentenceCount = sentences.length || 1;
+
+  const avgSentenceLength = wordCount / sentenceCount;
+
+  // Automated Readability Index (ARI) Formula
+  let ari = 4.71 * (charCount / wordCount) + 0.5 * (wordCount / sentenceCount) - 21.43;
+  ari = Math.max(1, Math.min(14, ari));
+
+  const roundedGrade = Math.round(ari);
+  
+  let gradeCategory = "";
+  let gradeInterpretation = "";
+  if (roundedGrade <= 5) {
+    gradeCategory = "Junior Prose";
+    gradeInterpretation = "Highly accessible structure and simple phrasings.";
+  } else if (roundedGrade <= 8) {
+    gradeCategory = "Middle-Grade";
+    gradeInterpretation = "Balanced modern prose style suitable for wide reach.";
+  } else if (roundedGrade <= 10) {
+    gradeCategory = "Contemporary Fiction";
+    gradeInterpretation = "Excellent, balanced structure for mainstream & literary novels.";
+  } else if (roundedGrade <= 12) {
+    gradeCategory = "Advanced Literary";
+    gradeInterpretation = "Stylistically dense framing with rich intellectual syntax.";
+  } else {
+    gradeCategory = "Academic / Ornate";
+    gradeInterpretation = "Complex, slow-burn phrasings and highly sophisticated patterns.";
+  }
+
+  let flowCategory = "";
+  let flowInterpretation = "";
+  if (avgSentenceLength < 12) {
+    flowCategory = "Punchy & Dynamic";
+    flowInterpretation = "Short, rapid phrasings that favor dialogue and action sequences.";
+  } else if (avgSentenceLength <= 20) {
+    flowCategory = "Balanced Standard";
+    flowInterpretation = "A pleasant, melodic cadence with natural descriptive pauses.";
+  } else if (avgSentenceLength <= 28) {
+    flowCategory = "Atmospheric & Long";
+    flowInterpretation = "Longer phrasings tailored for sensory, world-building, and pacing depth.";
+  } else {
+    flowCategory = "Intricate / Heavy";
+    flowInterpretation = "Extremely ornate syntax that demands careful pacing focus.";
+  }
+
+  return (
+    <div className="bg-white/80 border border-border-subtle rounded-2xl p-5 shadow-sm space-y-4 text-earth">
+      <div className="flex items-center gap-2 pb-2 border-b border-border-subtle/50">
+        <FileText className="w-3.5 h-3.5 text-sage" />
+        <span className="text-[10px] uppercase font-bold tracking-widest text-earth/50">Prose Metrics</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Metric 1: Grade Level */}
+        <div className="bg-paper p-3 rounded-xl border border-border-subtle/50 space-y-1">
+          <span className="block text-[9px] uppercase tracking-wider font-bold text-earth/40">Readability Grade</span>
+          <div className="font-serif text-lg font-bold text-sage">{ari.toFixed(1)}</div>
+          <span className="block text-[9px] font-sans font-medium text-earth/60 leading-tight">
+            {gradeCategory}
+          </span>
+        </div>
+
+        {/* Metric 2: Average Sentence Length */}
+        <div className="bg-paper p-3 rounded-xl border border-border-subtle/50 space-y-1">
+          <span className="block text-[9px] uppercase tracking-wider font-bold text-earth/40">Sentence Span</span>
+          <div className="font-serif text-lg font-bold text-sage">
+            {avgSentenceLength.toFixed(1)} <span className="text-[9px] font-sans font-normal text-earth/45">words</span>
+          </div>
+          <span className="block text-[9px] font-sans font-medium text-earth/60 leading-tight">
+            {flowCategory}
+          </span>
+        </div>
+      </div>
+
+      {/* Details list */}
+      <div className="space-y-2.5 text-[11px] font-serif border-t border-border-subtle/30 pt-3">
+        <div className="flex justify-between items-center text-earth/70">
+          <span>Words count:</span>
+          <span className="font-sans font-medium text-xs">{wordCount}</span>
+        </div>
+        <div className="flex justify-between items-center text-earth/70">
+          <span>Sentence count:</span>
+          <span className="font-sans font-medium text-xs">{sentenceCount}</span>
+        </div>
+        
+        {/* Progress gauge visual indicator */}
+        <div className="pt-2">
+          <div className="flex justify-between text-[9px] uppercase tracking-wider text-earth/40 font-sans font-bold mb-1.5">
+            <span>Pacing & Cadence Gauge</span>
+            <span>{avgSentenceLength.toFixed(0)} wps</span>
+          </div>
+          <div className="w-full bg-earth/10 h-1.5 rounded-full overflow-hidden">
+            <div 
+              className="bg-sage h-full rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(100, (avgSentenceLength / 35) * 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[8px] text-earth/30 font-sans mt-0.5">
+            <span>Punchy (&lt; 12)</span>
+            <span>Balanced (12-20)</span>
+            <span>Ornate (20+)</span>
+          </div>
+        </div>
+
+        <div className="bg-paper/50 rounded-xl p-3 text-[11px] italic leading-relaxed text-earth/70 border border-border-subtle/30 mt-2 font-serif text-balance">
+          {gradeInterpretation} {flowInterpretation}
+        </div>
+      </div>
     </div>
   );
 }
@@ -594,6 +731,134 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     }
   };
 
+  const handleExportPDF = () => {
+    if (!activeChapter) return;
+    
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const marginX = 25;
+      const marginY = 30;
+      const contentWidth = pageWidth - (marginX * 2); // 160mm
+      
+      // Choose Times font for a classic, sophisticated manuscript feeling
+      doc.setFont("Times", "normal");
+      
+      let currentY = marginY;
+      
+      // Simple helper to add a page and draw headers
+      const addPageWithHeader = () => {
+        doc.addPage();
+        doc.setFont("Times", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(140, 130, 115); // soft warm brown-earth tone
+        // Top running head
+        doc.text(`${story.title}   |   ${activeChapter.title || "Draft"}`, marginX, 15);
+        // Draw a very subtle top rule line
+        doc.setDrawColor(220, 215, 205);
+        doc.setLineWidth(0.1);
+        doc.line(marginX, 17, pageWidth - marginX, 17);
+        
+        doc.setFont("Times", "normal");
+        return marginY;
+      };
+
+      // --- Cover / Title Header for Page 1 ---
+      // Subtitle/Story metadata
+      doc.setFont("Times", "italic");
+      doc.setFontSize(10);
+      doc.setTextColor(100, 95, 85);
+      doc.text(`From the manuscript: "${story.title}"`, marginX, currentY);
+      currentY += 8;
+
+      // Title of the Chapter
+      doc.setFont("Times", "bold");
+      doc.setFontSize(24);
+      doc.setTextColor(40, 35, 30); // deep warm charcoal
+      
+      // Wrap title just in case it's extremely long
+      const rawTitle = activeChapter.title || "Untitled Chapter";
+      const wrappedTitle = doc.splitTextToSize(rawTitle, contentWidth);
+      wrappedTitle.forEach((line: string) => {
+        if (currentY > pageHeight - marginY) {
+          currentY = addPageWithHeader();
+        }
+        doc.text(line, marginX, currentY);
+        currentY += 10;
+      });
+      
+      currentY += 5;
+
+      // Draw a sleek, elegant separator line
+      doc.setDrawColor(180, 170, 150); // warm sand tone
+      doc.setLineWidth(0.5);
+      doc.line(marginX, currentY, pageWidth - marginX, currentY);
+      currentY += 15;
+
+      // --- Chapter Body ---
+      doc.setFont("Times", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(50, 48, 45); // highly readable deep charcoal
+
+      const textAndParagraphs = (activeChapter.content || "").split("\n");
+      
+      textAndParagraphs.forEach((paragraph) => {
+        const trimmed = paragraph.trim();
+        if (!trimmed) {
+          // Empty paragraph serves as a paragraph break spacing
+          currentY += 6;
+          return;
+        }
+
+        // Split text to fit line width
+        const lines = doc.splitTextToSize(trimmed, contentWidth);
+        
+        lines.forEach((line: string) => {
+          // Check if we need a new page
+          if (currentY > pageHeight - marginY) {
+            currentY = addPageWithHeader();
+            doc.setFont("Times", "normal");
+            doc.setFontSize(11);
+            doc.setTextColor(50, 48, 45);
+          }
+          
+          // Print the line
+          doc.text(line, marginX, currentY);
+          currentY += 6.5; // beautiful comfortable line-height for a 11pt font
+        });
+        
+        // extra spacing between paragraphs for contemporary readability
+        currentY += 3.5;
+      });
+
+      // --- Add Page Numbers to Footers on all pages ---
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFont("Times", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(140, 130, 115);
+        // Draw a simple, beautiful footer
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 15, { align: "center" });
+      }
+
+      // Save the PDF matching the chapter's title or general "manuscript"
+      const cleanStoryTitle = story.title.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+      const cleanChapterTitle = (activeChapter.title || "Chapter").trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `${cleanStoryTitle}_-_${cleanChapterTitle}.pdf`;
+      doc.save(filename);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert("Failed to export as PDF. Please try again.");
+    }
+  };
+
   const askAi = async () => {
     if (!story) return;
     setIsAiLoading(true);
@@ -741,33 +1006,47 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
           <div className="breadcrumb text-xs text-earth opacity-40 uppercase tracking-widest font-bold">
             Archive / {story.title} / {activeChapter?.title || "Draft"}
           </div>
-          <AnimatePresence mode="wait">
-            {saveStatus !== "idle" && (
-              <motion.div
-                key={saveStatus}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
-                className={cn(
-                  "flex items-center gap-1.5 text-[11px] font-sans font-medium tracking-wide",
-                  saveStatus === "saving" ? "text-earth/40" : "text-sage"
-                )}
+          <div className="flex items-center gap-4">
+            <AnimatePresence mode="wait">
+              {saveStatus !== "idle" && (
+                <motion.div
+                  key={saveStatus}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.15 }}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[11px] font-sans font-medium tracking-wide",
+                    saveStatus === "saving" ? "text-earth/40" : "text-sage"
+                  )}
+                >
+                  {saveStatus === "saving" ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin opacity-60" />
+                      <span>Saving manuscript...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3 h-3 text-sage stroke-[2.5px]" />
+                      <span>Autosaved</span>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {activeChapter && (
+              <button
+                id="export-pdf-btn"
+                onClick={handleExportPDF}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-earth/[0.02] border border-border-subtle rounded-xl text-[10px] font-sans font-bold uppercase tracking-wider text-earth hover:text-sage hover:border-sage/40 transition-all shadow-sm active:scale-95 shrink-0"
+                title="Export Chapter to Clean PDF"
               >
-                {saveStatus === "saving" ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 animate-spin opacity-60" />
-                    <span>Saving manuscript...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3 h-3 text-sage stroke-[2.5px]" />
-                    <span>Autosaved</span>
-                  </>
-                )}
-              </motion.div>
+                <Download className="w-3 h-3" />
+                <span>Export PDF</span>
+              </button>
             )}
-          </AnimatePresence>
+          </div>
         </div>
 
         {activeChapter ? (
@@ -890,6 +1169,8 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
                 </div>
               ) : (
                 <div className="space-y-6">
+                  <ReadabilityAnalysis content={activeChapter.content} />
+
                   <button
                     onClick={checkPlotHoles}
                     disabled={isReviewLoading}
