@@ -49,7 +49,8 @@ ${currentText || ""}
         contents: prompt,
         config: {
           systemInstruction,
-          temperature: 0.7,
+          temperature: 0.75,
+          maxOutputTokens: 300,
         }
       });
 
