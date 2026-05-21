@@ -34,3 +34,13 @@ export async function generateNext(currentText: string, note?: string) {
   if (!response.ok) throw new Error("Co-Writer failed");
   return response.json();
 }
+
+export async function modifySelection(fullText: string, selectedText: string, action: "enhance" | "pacing" | "dialogue") {
+  const response = await fetch("/api/modify-selection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fullText, selectedText, action }),
+  });
+  if (!response.ok) throw new Error("Selection modification failed");
+  return response.json();
+}

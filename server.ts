@@ -167,6 +167,61 @@ Please run a deep plot hole, motivation, and thematic review on the above chapte
     }
   });
 
+  // API Route: AI Modify Selection
+  app.post("/api/modify-selection", async (req, res) => {
+    try {
+      const { fullText, selectedText, action } = req.body;
+
+      if (!selectedText || !action) {
+        return res.status(400).json({ error: "Selected text and action type are required." });
+      }
+
+      const systemInstruction = (
+        "You are Inkwell's Master Editor. Your job is to rewrite a specific excerpt of text based " +
+        "on the user's editing goal. You MUST preserve the core meaning, character names, and overall " +
+        "plot points. Do not include any introductory remarks, explanations, or quotes. Output ONLY the rewritten prose."
+      );
+
+      let actionInstruction = "";
+      if (action === "enhance") {
+        actionInstruction = "Rewrite the selection to inject vivid sensory data, textures, and atmospheric depth. Make the scene rich and highly immersive.";
+      } else if (action === "pacing") {
+        actionInstruction = "Rewrite the selection to maximize tension and speed up the pacing. Use shorter, punchier sentences and eliminate unnecessary passive phrasing.";
+      } else if (action === "dialogue") {
+        actionInstruction = "Rewrite the selection to make the spoken dialogue flow naturally. Enhance the cadence, rhythm, and emotional subtext while matching authentic human speech.";
+      }
+
+      const prompt = `
+<story_context>
+The following is the entire background text of the story for context, matching tone and style:
+${fullText || ""}
+</story_context>
+
+<task>
+${actionInstruction}
+</task>
+
+<text_to_rewrite>
+${selectedText}
+</text_to_rewrite>
+`.trim();
+
+      const result = await genAI.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        }
+      });
+
+      res.json({ replacement: (result.text || "").trim() });
+    } catch (error) {
+      console.error("Gemini Modify Selection Error:", error);
+      res.status(500).json({ error: "Failed to modify selection" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
