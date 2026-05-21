@@ -28,6 +28,11 @@ service cloud.firestore {
         // Simple and robust: allow read, create, update, delete if the user owns the parent story
         allow read, write: if isSignedIn() && isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
       }
+
+      // Characters sub-collection
+      match /characters/{characterId} {
+        allow read, write: if isSignedIn() && isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
+      }
     }
 
     // Default deny

@@ -22,6 +22,16 @@ export interface Chapter {
   updatedAt: any;
 }
 
+export interface CharacterProfile {
+  id: string;
+  storyId: string;
+  name: string;
+  role: string;
+  traits: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string | null;

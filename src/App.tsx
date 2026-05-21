@@ -1,15 +1,197 @@
 import React, { useState, useEffect } from "react";
 import { auth, signIn, signOut, isOfflineMode } from "./lib/firebase";
 import { User } from "firebase/auth";
-import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers } from "lucide-react";
+import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers, Check, Users, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "./lib/firebase";
-import { Story, Chapter } from "./types";
+import { Story, Chapter, CharacterProfile } from "./types";
 import { cn, getAISuggestion, getAIReview } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
 
 // --- Components ---
+
+function CharacterCard({ 
+  character, 
+  onUpdate, 
+  onDelete 
+}: { 
+  character: CharacterProfile, 
+  onUpdate: (id: string, fields: Partial<CharacterProfile>) => Promise<void>, 
+  onDelete: (id: string) => Promise<void> 
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(character.name);
+  const [role, setRole] = useState(character.role);
+  const [traits, setTraits] = useState(character.traits);
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    await onUpdate(character.id, { name: name.trim(), role: role.trim(), traits: traits.trim() });
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="bg-white/80 border border-border-subtle rounded-2xl p-5 shadow-sm space-y-3 relative group transition-all hover:bg-white">
+      {isEditing ? (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-paper px-3 py-1.5 border border-border-subtle rounded-lg text-xs font-serif focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Role / Archetype</label>
+            <input
+              type="text"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full bg-paper px-3 py-1.5 border border-border-subtle rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth"
+              placeholder="e.g. Protagonist, Rebel, Mysterious Hermit"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Traits, Goals & Lore</label>
+            <textarea
+              value={traits}
+              onChange={(e) => setTraits(e.target.value)}
+              className="w-full bg-paper px-3 py-1.5 border border-border-subtle rounded-lg text-xs min-h-[70px] resize-y focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth font-serif leading-relaxed"
+              placeholder="Fiercely loyal, holds secret knowledge..."
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-3 py-1 text-[10px] uppercase tracking-wider font-bold text-earth/45 hover:text-earth transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-1.5 bg-sage text-white text-[10px] uppercase tracking-wider font-bold rounded-lg hover:bg-earth transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="flex justify-between items-start gap-2">
+            <div>
+              <h5 className="font-serif text-sm text-earth font-semibold leading-tight">{character.name}</h5>
+              <span className="text-[9px] uppercase font-bold text-sage tracking-widest mt-0.5 block">{character.role}</span>
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-1 text-earth/40 hover:text-earth transition-colors"
+                title="Edit Character"
+              >
+                <PenTool className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`Delete the character profile for ${character.name}?`)) {
+                    onDelete(character.id);
+                  }
+                }}
+                className="p-1 text-earth/40 hover:text-red-600 transition-colors"
+                title="Delete Character"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          {character.traits && (
+            <p className="text-xs text-ink/75 mt-2.5 font-serif italic leading-relaxed whitespace-pre-wrap">{character.traits}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddCharacterForm({ onAdd }: { onAdd: (name: string, role: string, traits: string) => Promise<void> }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [traits, setTraits] = useState("");
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    await onAdd(name, role, traits);
+    setName("");
+    setRole("");
+    setTraits("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {!isOpen ? (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-full py-3 border border-dashed border-sage text-sage rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sage/10 transition-all font-sans text-xs uppercase tracking-wider bg-white/30"
+        >
+          <UserPlus className="w-4 h-4" />
+          Add Character Profile
+        </button>
+      ) : (
+        <div className="bg-white/80 p-5 rounded-2xl border border-border-subtle space-y-4 animate-fade-in text-earth shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-border-subtle/50">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-earth/50">New Character Profile</span>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-[10px] uppercase font-bold text-earth/40 hover:text-earth"
+            >
+              Cancel
+            </button>
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-paper px-3 py-2 border border-border-subtle rounded-xl text-xs font-serif focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth"
+              placeholder="e.g. David Vance"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Role / Archetype</label>
+            <input
+              type="text"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full bg-paper px-3 py-2 border border-border-subtle rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth"
+              placeholder="e.g. Protagonist, Secret Keeper"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Traits & Lore</label>
+            <textarea
+              value={traits}
+              onChange={(e) => setTraits(e.target.value)}
+              className="w-full bg-paper px-3 py-2 border border-border-subtle rounded-xl text-xs min-h-[85px] resize-y focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth font-serif leading-relaxed"
+              placeholder="Ambitious, slightly paranoid, looking for the last copy of the lost volume..."
+            />
+          </div>
+          <button
+            disabled={!name.trim()}
+            onClick={handleCreate}
+            className="w-full py-2.5 bg-sage text-white rounded-xl font-bold hover:bg-earth transition-all disabled:opacity-35 text-xs text-center uppercase tracking-wider shadow-md shadow-sage/10"
+          >
+            Create Profile
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Navbar({ user }: { user: any }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -181,9 +363,20 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [aiResult, setAiResult] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<"muse" | "checker">("muse");
+  const [activeTab, setActiveTab] = useState<"muse" | "checker" | "characters">("muse");
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [reviewLoadingStep, setReviewLoadingStep] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [characters, setCharacters] = useState<CharacterProfile[]>([]);
+
+  useEffect(() => {
+    if (saveStatus === "saved") {
+      const timer = setTimeout(() => {
+        setSaveStatus("idle");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveStatus]);
 
   useEffect(() => {
     if (!isReviewLoading) {
@@ -195,6 +388,111 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     }, 4000);
     return () => clearInterval(interval);
   }, [isReviewLoading]);
+
+  useEffect(() => {
+    if (!story?.id) return;
+
+    if (isOfflineMode) {
+      const loadCharacters = () => {
+        const stored = localStorage.getItem("inkwell_characters");
+        if (stored) {
+          try {
+            const list = JSON.parse(stored) as CharacterProfile[];
+            const filtered = list.filter(c => c.storyId === story.id);
+            // Sort by name
+            const sorted = filtered.sort((a, b) => a.name.localeCompare(b.name));
+            setCharacters(sorted);
+          } catch (e) {
+            console.error("Failed to parse local characters", e);
+          }
+        } else {
+          setCharacters([]);
+        }
+      };
+      loadCharacters();
+      window.addEventListener("inkwell_db_changed", loadCharacters);
+      return () => {
+        window.removeEventListener("inkwell_db_changed", loadCharacters);
+      };
+    }
+
+    const q = query(collection(db, `stories/${story.id}/characters`));
+    return onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as CharacterProfile));
+      const sorted = data.sort((a, b) => a.name.localeCompare(b.name));
+      setCharacters(sorted);
+    }, (error) => {
+      console.error("Characters subscription failed:", error);
+    });
+  }, [story.id]);
+
+  const addCharacter = async (name: string, role: string, traits: string) => {
+    try {
+      const newChar = {
+        storyId: story.id,
+        name: name.trim() || "New Character",
+        role: role.trim() || "Secondary Character",
+        traits: traits.trim() || "Intriguing traits...",
+        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+      };
+
+      if (isOfflineMode) {
+        const id = "char_" + Math.random().toString(36).substring(2, 9);
+        const stored = localStorage.getItem("inkwell_characters");
+        const list = stored ? JSON.parse(stored) : [];
+        list.push({ ...newChar, id });
+        localStorage.setItem("inkwell_characters", JSON.stringify(list));
+        window.dispatchEvent(new Event("inkwell_db_changed"));
+      } else {
+        await addDoc(collection(db, `stories/${story.id}/characters`), newChar);
+      }
+    } catch (error: any) {
+      console.error("Character addition failed:", error);
+      alert(`Could not add character: ${error.message || error}`);
+    }
+  };
+
+  const updateCharacter = async (charId: string, fields: Partial<CharacterProfile>) => {
+    try {
+      if (isOfflineMode) {
+        const stored = localStorage.getItem("inkwell_characters");
+        if (stored) {
+          const list = JSON.parse(stored) as CharacterProfile[];
+          const idx = list.findIndex(c => c.id === charId);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...fields, updatedAt: { seconds: Date.now() / 1000 } };
+            localStorage.setItem("inkwell_characters", JSON.stringify(list));
+            window.dispatchEvent(new Event("inkwell_db_changed"));
+          }
+        }
+      } else {
+        const docRef = doc(db, `stories/${story.id}/characters`, charId);
+        await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
+      }
+    } catch (error: any) {
+      console.error("Character update failed:", error);
+    }
+  };
+
+  const deleteCharacter = async (charId: string) => {
+    try {
+      if (isOfflineMode) {
+        const stored = localStorage.getItem("inkwell_characters");
+        if (stored) {
+          const list = JSON.parse(stored) as CharacterProfile[];
+          const filtered = list.filter(c => c.id !== charId);
+          localStorage.setItem("inkwell_characters", JSON.stringify(filtered));
+          window.dispatchEvent(new Event("inkwell_db_changed"));
+        }
+      } else {
+        const docRef = doc(db, `stories/${story.id}/characters`, charId);
+        await deleteDoc(docRef);
+      }
+    } catch (error: any) {
+      console.error("Character deletion failed:", error);
+    }
+  };
 
   useEffect(() => {
     if (!story?.id) return;
@@ -271,6 +569,7 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
   const handleUpdate = async (fields: Partial<Chapter>) => {
     if (!activeChapter) return;
+    setSaveStatus("saving");
     try {
       if (isOfflineMode) {
         const stored = localStorage.getItem("inkwell_chapters");
@@ -288,8 +587,10 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
         await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
       }
       setActiveChapter(prev => prev ? ({ ...prev, ...fields }) : null);
+      setSaveStatus("saved");
     } catch (error: any) {
       console.error("Chapter update failed:", error);
+      setSaveStatus("idle");
     }
   };
 
@@ -298,6 +599,10 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     setIsAiLoading(true);
     setAiResult("");
     try {
+      const charactersText = characters.length > 0
+        ? "\n\nSTORY CHARACTERS:\n" + characters.map(c => `- Name: ${c.name}\n  Role: ${c.role}\n  Traits: ${c.traits}`).join("\n")
+        : "";
+
       // Create a solid context block defining story properties and scene details
       const storyContext = `
 Title: ${story.title}
@@ -305,13 +610,13 @@ Genre: ${story.genre || "General Fiction"}
 Description: ${story.description || "No description provided"}
 Active Chapter: ${activeChapter?.title || "Draft"}
 Scene Notes: ${activeChapter?.notes || "No draft notes available"}
-      `.trim();
+      `.trim() + charactersText;
 
       const prompt = activeChapter?.content 
         ? `Review the existing text (current draft length: ${activeChapter.content.length} characters):
 "${activeChapter.content.slice(0, 3000)}"
 
-Develop three highly evocative continuing paths. Organize your suggestions exactly into these matching headings:
+Develop three highly evocative continuing paths. Optimize suggestions referencing our registered characters if appropriate. Organize your suggestions exactly into these matching headings:
 
 ### 💫 Chapter Continuations
 Formulate three (3) contrasting lines of action, focusing on sensory feedback, visceral beats, and transitional timing.
@@ -348,13 +653,17 @@ Describe 2-3 sensory and physical specifics of the starting setting (specificall
     if (!activeChapter || !activeChapter.content.trim()) return;
     setIsReviewLoading(true);
     try {
+      const charactersText = characters.length > 0
+        ? "\n\nSTORY CHARACTERS PROFILE:\n" + characters.map(c => `- Name: ${c.name}\n  Role: ${c.role}\n  Traits: ${c.traits}`).join("\n")
+        : "";
+
       const storyContext = `
 Story Title: ${story.title}
 Story Genre: ${story.genre || "General Fiction"}
 Story Description: ${story.description || "No description provided"}
 Active Chapter Title: ${activeChapter.title || "Unnamed Chapter"}
 Chapter Notes: ${activeChapter.notes || "No draft notes available"}
-      `.trim();
+      `.trim() + charactersText;
 
       const { review } = await getAIReview(activeChapter.content, storyContext);
       await handleUpdate({ review });
@@ -428,8 +737,37 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
           <ChevronRight className={cn("w-4 h-4 transition-transform", isSidebarOpen && "rotate-180")} />
         </button>
 
-        <div className="breadcrumb text-xs mb-8 text-earth opacity-40 uppercase tracking-widest font-bold">
-          Archive / {story.title} / {activeChapter?.title || "Draft"}
+        <div className="flex items-center justify-between mb-8 gap-4 min-h-[24px]">
+          <div className="breadcrumb text-xs text-earth opacity-40 uppercase tracking-widest font-bold">
+            Archive / {story.title} / {activeChapter?.title || "Draft"}
+          </div>
+          <AnimatePresence mode="wait">
+            {saveStatus !== "idle" && (
+              <motion.div
+                key={saveStatus}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.15 }}
+                className={cn(
+                  "flex items-center gap-1.5 text-[11px] font-sans font-medium tracking-wide",
+                  saveStatus === "saving" ? "text-earth/40" : "text-sage"
+                )}
+              >
+                {saveStatus === "saving" ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin opacity-60" />
+                    <span>Saving manuscript...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3 h-3 text-sage stroke-[2.5px]" />
+                    <span>Autosaved</span>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {activeChapter ? (
@@ -488,6 +826,17 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
             >
               Plot Audit
             </button>
+            <button
+              onClick={() => setActiveTab("characters")}
+              className={cn(
+                "text-xs uppercase tracking-wider font-bold pb-2 transition-all border-b-2 flex items-center gap-1.5",
+                activeTab === "characters"
+                  ? "border-sage text-sage"
+                  : "border-transparent text-earth/30 hover:text-earth/60"
+              )}
+            >
+              Characters
+            </button>
           </div>
           <Sparkles className="w-3.5 h-3.5 text-sage/60" />
         </div>
@@ -523,7 +872,7 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
                 </div>
               )}
             </div>
-          ) : (
+          ) : activeTab === "checker" ? (
             <div className="space-y-6 animate-fade-in">
               {!activeChapter ? (
                 <div className="text-center py-16 px-6 border border-dashed border-border-subtle rounded-2xl bg-paper/30">
@@ -621,6 +970,36 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
                   )}
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="space-y-6 animate-fade-in text-earth">
+              <AddCharacterForm onAdd={addCharacter} />
+
+              <div className="space-y-4 pt-2">
+                <span className="text-[10px] uppercase font-bold text-sage tracking-widest flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-sage" /> Defined Characters ({characters.length})
+                </span>
+
+                {characters.length === 0 ? (
+                  <div className="text-center py-12 px-5 border border-dashed border-border-subtle rounded-2xl bg-paper/20 animate-fade-in">
+                    <Users className="w-5 h-5 text-earth/20 mx-auto mb-2" />
+                    <p className="text-[10px] font-bold text-earth/45 uppercase tracking-[2.5px] leading-relaxed">
+                      No profiles registered yet. Craft characters to guide the Muse!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-fade-in">
+                    {characters.map((char) => (
+                      <CharacterCard
+                        key={char.id}
+                        character={char}
+                        onUpdate={updateCharacter}
+                        onDelete={deleteCharacter}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
