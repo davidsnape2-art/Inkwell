@@ -38,3 +38,9 @@ export interface UserProfile {
   email: string | null;
   photoURL: string | null;
 }
+
+export interface DocumentItem {
+  id: string;
+  title: string;
+  content: string;
+}

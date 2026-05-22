@@ -1131,18 +1131,28 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
               <div className="section-header">Manuscript Chapters</div>
               <div className="space-y-1">
                 {chapters.map(c => (
-                  <button
+                  <div
                     key={c.id}
                     onClick={() => setActiveChapter(c)}
                     className={cn(
-                      "nav-item-natural w-full text-left line-clamp-1",
+                      "nav-item-natural w-full text-left flex items-center transition-all cursor-pointer py-2 px-3.5 rounded-xl border border-transparent",
                       activeChapter?.id === c.id 
-                        ? "nav-item-active" 
-                        : "nav-item-hover text-ink/60"
+                        ? "bg-sage/10 text-sage border-sage/10 shadow-xs" 
+                        : "text-ink/60 hover:bg-earth/[0.02]"
                     )}
                   >
-                    <span className="font-medium">{c.title}</span>
-                  </button>
+                    {activeChapter?.id === c.id ? (
+                      <input
+                        value={c.title}
+                        onChange={(e) => handleUpdate({ title: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-transparent border-none text-sage font-medium text-sm w-full outline-none focus:ring-0 p-0"
+                        placeholder="Untitled Chapter"
+                      />
+                    ) : (
+                      <span className="font-medium text-sm truncate">{c.title || "Untitled Chapter"}</span>
+                    )}
+                  </div>
                 ))}
               </div>
 
