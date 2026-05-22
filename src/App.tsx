@@ -524,6 +524,17 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
       .join("");
   };
 
+  const INKWELL_STORAGE_KEY = "inkwell_editor_draft";
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -533,8 +544,24 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     ],
     content: "",
     onUpdate: ({ editor }) => {
-      const plainText = editor.getText({ blockSeparator: "\n\n" });
-      handleUpdate({ content: plainText });
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      setSaveStatus("saving");
+      
+      saveTimeoutRef.current = setTimeout(async () => {
+        const plainText = editor.getText({ blockSeparator: "\n\n" });
+        const currentHTML = editor.getHTML();
+        
+        if (activeChapter) {
+          localStorage.setItem(`${INKWELL_STORAGE_KEY}_${activeChapter.id}`, currentHTML);
+        } else {
+          localStorage.setItem(INKWELL_STORAGE_KEY, currentHTML);
+        }
+
+        await handleUpdate({ content: plainText });
+        setSaveStatus("saved");
+      }, 500);
     },
     editorProps: {
       attributes: {
@@ -549,9 +576,36 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   useEffect(() => {
     if (editor && activeChapter) {
       if (lastActiveChapterIdRef.current !== activeChapter.id) {
+        // Flush pending save first before switching
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+          const plainText = editor.getText({ blockSeparator: "\n\n" });
+          if (lastActiveChapterIdRef.current) {
+            setSaveStatus("saving");
+            const storedChapters = localStorage.getItem("inkwell_chapters");
+            if (isOfflineMode && storedChapters) {
+              const list = JSON.parse(storedChapters) as Chapter[];
+              const idx = list.findIndex(c => c.id === lastActiveChapterIdRef.current);
+              if (idx !== -1) {
+                list[idx] = { ...list[idx], content: plainText, updatedAt: { seconds: Date.now() / 1000 } };
+                localStorage.setItem("inkwell_chapters", JSON.stringify(list));
+                window.dispatchEvent(new Event("inkwell_db_changed"));
+              }
+            } else if (!isOfflineMode) {
+              const docRef = doc(db, `stories/${story.id}/chapters`, lastActiveChapterIdRef.current);
+              updateDoc(docRef, { content: plainText, updatedAt: serverTimestamp() }).catch(console.error);
+            }
+          }
+        }
+
         lastActiveChapterIdRef.current = activeChapter.id;
-        const htmlContent = textToHtml(activeChapter.content || "");
-        editor.commands.setContent(htmlContent);
+        const backupHTML = localStorage.getItem(`${INKWELL_STORAGE_KEY}_${activeChapter.id}`);
+        if (backupHTML) {
+          editor.commands.setContent(backupHTML);
+        } else {
+          const htmlContent = textToHtml(activeChapter.content || "");
+          editor.commands.setContent(htmlContent);
+        }
       }
     } else if (editor && !activeChapter) {
       lastActiveChapterIdRef.current = null;
