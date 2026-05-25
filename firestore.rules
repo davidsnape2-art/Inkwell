@@ -33,6 +33,11 @@ service cloud.firestore {
       match /characters/{characterId} {
         allow read, write: if isSignedIn() && isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
       }
+
+      // Lore sub-collection
+      match /lore/{loreId} {
+        allow read, write: if isSignedIn() && isOwner(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId);
+      }
     }
 
     // Default deny

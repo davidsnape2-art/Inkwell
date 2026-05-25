@@ -29,6 +29,19 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["storyId", "title", "content", "order", "authorId", "createdAt", "updatedAt"]
+    },
+    "LoreEntry": {
+      "title": "LoreEntry",
+      "description": "A lore or world-building entry",
+      "type": "object",
+      "properties": {
+        "storyId": { "type": "string", "description": "Reference to the parent story" },
+        "keyword": { "type": "string", "description": "Keyword/Entity name to trigger reference scan" },
+        "description": { "type": "string", "description": "Description/Details about this lore fact" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storyId", "keyword", "description", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -39,6 +52,10 @@
     "/stories/{storyId}/chapters/{chapterId}": {
       "schema": "Chapter",
       "description": "Chapters belonging to a specific story"
+    },
+    "/stories/{storyId}/lore/{loreId}": {
+      "schema": "LoreEntry",
+      "description": "Lorebook entries belonging to a story"
     }
   }
 }

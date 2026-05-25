@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { auth, signIn, signOut, isOfflineMode } from "./lib/firebase";
 import { User } from "firebase/auth";
-import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers, Check, Users, UserPlus, FileText, Download } from "lucide-react";
+import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save, Plus, AlertTriangle, Eye, RefreshCw, Layers, Check, Users, UserPlus, FileText, Download, BookMarked, Tag } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "./lib/firebase";
-import { Story, Chapter, CharacterProfile } from "./types";
+import { Story, Chapter, CharacterProfile, LoreEntry } from "./types";
 import { cn, getAISuggestion, getAIReview, generateNext, modifySelection } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
 import { jsPDF } from "jspdf";
@@ -199,6 +199,164 @@ function AddCharacterForm({ onAdd }: { onAdd: (name: string, role: string, trait
   );
 }
 
+function LoreEntryCard({ 
+  entry, 
+  onUpdate, 
+  onDelete 
+}: { 
+  entry: LoreEntry, 
+  onUpdate: (id: string, fields: Partial<LoreEntry>) => Promise<void>, 
+  onDelete: (id: string) => Promise<void> 
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [keyword, setKeyword] = useState(entry.keyword);
+  const [description, setDescription] = useState(entry.description);
+
+  const handleSave = async () => {
+    if (!keyword.trim()) return;
+    await onUpdate(entry.id, { keyword: keyword.trim(), description: description.trim() });
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="bg-white/80 border border-border-subtle rounded-2xl p-5 shadow-sm space-y-3 relative group transition-all hover:bg-white animate-fade-in">
+      {isEditing ? (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Keyword / Entity Name</label>
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="w-full bg-paper px-3 py-1.5 border border-border-subtle rounded-lg text-xs font-serif focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Description / Details</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-paper px-3 py-1.5 border border-border-subtle rounded-lg text-xs min-h-[70px] resize-y focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth font-serif leading-relaxed"
+              placeholder="Lead driver. Wears red gloves, calm under pressure..."
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-3 py-1 text-[10px] uppercase tracking-wider font-bold text-earth/45 hover:text-earth transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-1.5 bg-sage text-white text-[10px] uppercase tracking-wider font-bold rounded-lg hover:bg-earth transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="flex justify-between items-start gap-2">
+            <div>
+              <h5 className="font-serif text-sm text-earth font-semibold leading-tight">{entry.keyword}</h5>
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-1 text-earth/40 hover:text-earth transition-colors"
+                title="Edit Lore Entry"
+              >
+                <PenTool className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`Delete the lore entry for "${entry.keyword}"?`)) {
+                    onDelete(entry.id);
+                  }
+                }}
+                className="p-1 text-earth/40 hover:text-red-600 transition-colors"
+                title="Delete Lore Entry"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          {entry.description && (
+            <p className="text-xs text-ink/75 mt-2 font-serif italic leading-relaxed whitespace-pre-wrap">{entry.description}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddLoreEntryForm({ onAdd }: { onAdd: (keyword: string, description: string) => Promise<void> }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [keyword, setKeyword] = useState("");
+  const [description, setDescription] = useState("");
+
+  const handleCreate = async () => {
+    if (!keyword.trim()) return;
+    await onAdd(keyword, description);
+    setKeyword("");
+    setDescription("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {!isOpen ? (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-full py-3 border border-dashed border-sage text-sage rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sage/10 transition-all font-sans text-xs uppercase tracking-wider bg-white/30"
+        >
+          <Plus className="w-4 h-4" />
+          Add Lore/World Entry
+        </button>
+      ) : (
+        <div className="bg-white/80 p-5 rounded-2xl border border-border-subtle space-y-4 animate-fade-in text-earth shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-border-subtle/50">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-earth/50">New Lore Entry</span>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-[10px] uppercase font-bold text-earth/40 hover:text-earth"
+            >
+              Cancel
+            </button>
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Keyword / Entity Name</label>
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="w-full bg-paper px-3 py-2 border border-border-subtle rounded-xl text-xs font-serif focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth"
+              placeholder="e.g. Brian, Blackwood Forest, Elder Tree"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] uppercase font-bold tracking-widest text-earth/50 mb-1">Description & Lore</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-paper px-3 py-2 border border-border-subtle rounded-xl text-xs min-h-[85px] resize-y focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth font-serif leading-relaxed"
+              placeholder="e.g. Lead driver. Wears red gloves, calm under pressure."
+            />
+          </div>
+          <button
+            disabled={!keyword.trim()}
+            onClick={handleCreate}
+            className="w-full py-2.5 bg-sage text-white rounded-xl font-bold hover:bg-earth transition-all disabled:opacity-35 text-xs text-center uppercase tracking-wider shadow-md shadow-sage/10"
+          >
+            Create Lore Entry
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReadabilityAnalysis({ content }: { content: string }) {
   if (!content || !content.trim()) {
     return (
@@ -335,7 +493,7 @@ function ReadabilityAnalysis({ content }: { content: string }) {
   );
 }
 
-function Navbar({ user }: { user: any }) {
+function Navbar({ user, onBrandClick }: { user: any; onBrandClick?: () => void }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   const handleSignIn = async () => {
@@ -351,7 +509,13 @@ function Navbar({ user }: { user: any }) {
 
   return (
     <nav className="border-b border-border-subtle py-4 px-6 flex justify-between items-center bg-paper/80 backdrop-blur-md sticky top-0 z-50">
-      <div className="flex items-center gap-2">
+      <div 
+        className={cn(
+          "flex items-center gap-2",
+          onBrandClick ? "cursor-pointer hover:opacity-80 transition-opacity" : ""
+        )}
+        onClick={onBrandClick}
+      >
         <BookOpen className="w-6 h-6 text-sage" />
         <span className="font-serif text-2xl font-light tracking-tight text-earth italic">StorySmith</span>
       </div>
@@ -360,6 +524,15 @@ function Navbar({ user }: { user: any }) {
           <span className="text-xs bg-sage/10 text-sage font-mono px-3 py-1 rounded-full animate-pulse border border-sage/20 hidden md:inline-block">
             Offline Mode
           </span>
+        )}
+        {user && onBrandClick && (
+          <button
+            onClick={onBrandClick}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sage/10 text-sage hover:bg-sage hover:text-white transition-all rounded-xl text-xs font-semibold"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Library</span>
+          </button>
         )}
         {user ? (
           <div className="flex items-center gap-4">
@@ -653,7 +826,6 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     if (!currentText.trim()) return;
     setIsCoWriting(true);
     try {
-      const lorebook = JSON.parse(localStorage.getItem("inkwell_lorebook") || "[]");
       const { suggestion } = await generateNext(currentText, directorsNote.trim(), lorebook);
       if (suggestion && suggestion.trim()) {
         editor.chain().focus("end").insertContent(`<p>${suggestion.trim()}</p>`).run();
@@ -693,11 +865,12 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     return () => window.removeEventListener("inkwell-slash-command", handleSlashTrigger);
   }, [editor, chapters, activeChapter?.id, directorsNote]); // Keep dependencies refreshed for structural auto-saves
   
-  const [activeTab, setActiveTab] = useState<"muse" | "checker" | "characters">("muse");
+  const [activeTab, setActiveTab] = useState<"muse" | "checker" | "characters" | "lorebook">("muse");
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [reviewLoadingStep, setReviewLoadingStep] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [characters, setCharacters] = useState<CharacterProfile[]>([]);
+  const [lorebook, setLorebook] = useState<LoreEntry[]>([]);
 
   useEffect(() => {
     if (saveStatus === "saved") {
@@ -753,6 +926,43 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
       setCharacters(sorted);
     }, (error) => {
       console.error("Characters subscription failed:", error);
+    });
+  }, [story.id]);
+
+  useEffect(() => {
+    if (!story?.id) return;
+
+    if (isOfflineMode) {
+      const loadLorebook = () => {
+        const stored = localStorage.getItem("inkwell_lore");
+        if (stored) {
+          try {
+            const list = JSON.parse(stored) as (LoreEntry & { storyId: string })[];
+            const filtered = list.filter(c => c.storyId === story.id);
+            // Sort by keyword
+            const sorted = filtered.sort((a, b) => a.keyword.localeCompare(b.keyword));
+            setLorebook(sorted);
+          } catch (e) {
+            console.error("Failed to parse local lorebook", e);
+          }
+        } else {
+          setLorebook([]);
+        }
+      };
+      loadLorebook();
+      window.addEventListener("inkwell_db_changed", loadLorebook);
+      return () => {
+        window.removeEventListener("inkwell_db_changed", loadLorebook);
+      };
+    }
+
+    const q = query(collection(db, `stories/${story.id}/lore`));
+    return onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as LoreEntry));
+      const sorted = data.sort((a, b) => a.keyword.localeCompare(b.keyword));
+      setLorebook(sorted);
+    }, (error) => {
+      console.error("Lorebook subscription failed:", error);
     });
   }, [story.id]);
 
@@ -821,6 +1031,73 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
       }
     } catch (error: any) {
       console.error("Character deletion failed:", error);
+    }
+  };
+
+  const addLoreEntry = async (keyword: string, description: string) => {
+    try {
+      const newEntry = {
+        storyId: story.id,
+        keyword: keyword.trim() || "New Keyword",
+        description: description.trim() || "Details...",
+        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+      };
+
+      if (isOfflineMode) {
+        const id = "lore_" + Math.random().toString(36).substring(2, 9);
+        const stored = localStorage.getItem("inkwell_lore");
+        const list = stored ? JSON.parse(stored) : [];
+        list.push({ ...newEntry, id });
+        localStorage.setItem("inkwell_lore", JSON.stringify(list));
+        window.dispatchEvent(new Event("inkwell_db_changed"));
+      } else {
+        await addDoc(collection(db, `stories/${story.id}/lore`), newEntry);
+      }
+    } catch (error: any) {
+      console.error("Lore entry addition failed:", error);
+      alert(`Could not add lore: ${error.message || error}`);
+    }
+  };
+
+  const updateLoreEntry = async (id: string, fields: Partial<LoreEntry>) => {
+    try {
+      if (isOfflineMode) {
+        const stored = localStorage.getItem("inkwell_lore");
+        if (stored) {
+          const list = JSON.parse(stored) as (LoreEntry & { storyId: string })[];
+          const idx = list.findIndex(c => c.id === id);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...fields, updatedAt: { seconds: Date.now() / 1000 } };
+            localStorage.setItem("inkwell_lore", JSON.stringify(list));
+            window.dispatchEvent(new Event("inkwell_db_changed"));
+          }
+        }
+      } else {
+        const docRef = doc(db, `stories/${story.id}/lore`, id);
+        await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
+      }
+    } catch (error: any) {
+      console.error("Lore entry update failed:", error);
+    }
+  };
+
+  const deleteLoreEntry = async (id: string) => {
+    try {
+      if (isOfflineMode) {
+        const stored = localStorage.getItem("inkwell_lore");
+        if (stored) {
+          const list = JSON.parse(stored) as (LoreEntry & { storyId: string })[];
+          const filtered = list.filter(c => c.id !== id);
+          localStorage.setItem("inkwell_lore", JSON.stringify(filtered));
+          window.dispatchEvent(new Event("inkwell_db_changed"));
+        }
+      } else {
+        const docRef = doc(db, `stories/${story.id}/lore`, id);
+        await deleteDoc(docRef);
+      }
+    } catch (error: any) {
+      console.error("Lore entry deletion failed:", error);
     }
   };
 
@@ -1422,6 +1699,17 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
             >
               Characters
             </button>
+            <button
+              onClick={() => setActiveTab("lorebook")}
+              className={cn(
+                "text-xs uppercase tracking-wider font-bold pb-2 transition-all border-b-2 flex items-center gap-1.5",
+                activeTab === "lorebook"
+                  ? "border-sage text-sage"
+                  : "border-transparent text-earth/30 hover:text-earth/60"
+              )}
+            >
+              Lore
+            </button>
           </div>
           <Sparkles className="w-3.5 h-3.5 text-sage/60" />
         </div>
@@ -1558,7 +1846,7 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
                 </div>
               )}
             </div>
-          ) : (
+          ) : activeTab === "characters" ? (
             <div className="space-y-6 animate-fade-in text-earth">
               <AddCharacterForm onAdd={addCharacter} />
 
@@ -1582,6 +1870,36 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
                         character={char}
                         onUpdate={updateCharacter}
                         onDelete={deleteCharacter}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-fade-in text-earth">
+              <AddLoreEntryForm onAdd={addLoreEntry} />
+
+              <div className="space-y-4 pt-2">
+                <span className="text-[10px] uppercase font-bold text-sage tracking-widest flex items-center gap-1">
+                  <BookMarked className="w-3.5 h-3.5 text-sage" /> Lorebook ({lorebook.length})
+                </span>
+
+                {lorebook.length === 0 ? (
+                  <div className="text-center py-12 px-5 border border-dashed border-border-subtle rounded-2xl bg-paper/20 animate-fade-in">
+                    <Tag className="w-5 h-5 text-earth/20 mx-auto mb-2" />
+                    <p className="text-[10px] font-bold text-earth/45 uppercase tracking-[2.5px] leading-relaxed">
+                      No lore entries registered yet. Craft keys, locations, or items!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-fade-in">
+                    {lorebook.map((entry) => (
+                      <LoreEntryCard
+                        key={entry.id}
+                        entry={entry}
+                        onUpdate={updateLoreEntry}
+                        onDelete={deleteLoreEntry}
                       />
                     ))}
                   </div>
@@ -1812,7 +2130,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-paper font-sans selection:bg-olive/20 selection:text-olive">
-      <Navbar user={user} />
+      <Navbar user={user} onBrandClick={selectedStory ? () => setSelectedStory(null) : undefined} />
       
       <main>
         {!user ? (
