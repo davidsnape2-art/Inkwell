@@ -44,3 +44,9 @@ export interface DocumentItem {
   title: string;
   content: string;
 }
+
+export interface LoreEntry {
+  id: string;
+  keyword: string; // e.g., "Brian" or "Sarah"
+  description: string; // e.g., "Lead driver. Wears red gloves, calm under pressure."
+}

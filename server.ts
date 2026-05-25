@@ -25,18 +25,36 @@ async function startServer() {
   // API Route: Elite Co-Writer Continuation (Seamless text flow)
   app.post("/api/generate-next", async (req, res) => {
     try {
-      const { currentText, note } = req.body;
+      const { currentText, note, lorebook } = req.body;
 
       if (!currentText) {
         return res.status(400).json({ error: "Text context is required." });
       }
 
-      const systemInstruction = (
+      let systemInstruction = (
         "You are Inkwell's Elite Co-Writer. Your job is to seamlessly continue the user's story. " +
         "Mimic their voice, cadence, sentence structures, and tone precisely. Focus deeply on sensory " +
         "details and internal tracking of thoughts. Do not include any conversational filler, " +
         "introductory phrases, or markdown headers. Output ONLY the raw story prose."
       );
+
+      // Scan the text for active character / lore references inside lorebook
+      const matchedLore: string[] = [];
+      if (lorebook && Array.isArray(lorebook) && lorebook.length > 0) {
+        lorebook.forEach((entry: any) => {
+          if (entry && entry.keyword) {
+            // Use a case-insensitive regex pattern matching whole words only
+            const wordRegex = new RegExp(`\\b${entry.keyword}\\b`, "i");
+            if (wordRegex.test(currentText) || (note && wordRegex.test(note))) {
+              matchedLore.push(`- ${entry.keyword}: ${entry.description}`);
+            }
+          }
+        });
+      }
+
+      if (matchedLore.length > 0) {
+        systemInstruction += `\n\nCRITICAL CHARACTER/LORE FACTS TO ENFORCE:\n${matchedLore.join("\n")}\nKeep these details 100% consistent in the next paragraph.`;
+      }
 
       let contextBlock = "Continue the scene smoothly. Write exactly one robust paragraph. Do not rush the plot, stay in the current moment.";
       if (note && note.trim().length > 0) {

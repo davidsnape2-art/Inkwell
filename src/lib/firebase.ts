@@ -1,7 +1,15 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously } from "firebase/auth";
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
-import firebaseConfig from "../../firebase-applet-config.json";
+const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "test-project-id",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  firestoreDatabaseId: "(default)"
+};
 
 // Detect if Firebase configuration is using placeholders
 export const isOfflineMode = !firebaseConfig.apiKey || 

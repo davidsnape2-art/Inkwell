@@ -13,6 +13,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { KeyboardTriggerExtension } from "./lib/KeyboardTriggerExtension";
 
 // --- Components ---
 
@@ -526,6 +527,7 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
   const INKWELL_STORAGE_KEY = "inkwell_editor_draft";
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const coWriteTriggerRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     return () => {
@@ -540,6 +542,11 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
       StarterKit,
       Placeholder.configure({
         placeholder: "The words began to flow like a river...",
+      }),
+      KeyboardTriggerExtension.configure({
+        onTrigger: () => {
+          coWriteTriggerRef.current();
+        },
       }),
     ],
     content: "",
@@ -646,7 +653,8 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     if (!currentText.trim()) return;
     setIsCoWriting(true);
     try {
-      const { suggestion } = await generateNext(currentText, directorsNote.trim());
+      const lorebook = JSON.parse(localStorage.getItem("inkwell_lorebook") || "[]");
+      const { suggestion } = await generateNext(currentText, directorsNote.trim(), lorebook);
       if (suggestion && suggestion.trim()) {
         editor.chain().focus("end").insertContent(`<p>${suggestion.trim()}</p>`).run();
         setDirectorsNote("");
@@ -662,6 +670,28 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
       setIsCoWriting(false);
     }
   };
+
+  useEffect(() => {
+    coWriteTriggerRef.current = handleCoWriteContinuation;
+  }, [directorsNote, isCoWriting]);
+
+  useEffect(() => {
+    const handleSlashTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action: string }>;
+      const actionType = customEvent.detail.action;
+
+      if (actionType === "ai-continue") {
+        console.log("Slash Command triggered automated continuation sequence...");
+        handleCoWriteContinuation(); // Fires the existing API call
+      } else if (actionType === "ai-scenery") {
+        // You can expand your backend API payload routes to handle descriptive scenic tasks later!
+        console.log("Generate background sensory profiles...");
+      }
+    };
+
+    window.addEventListener("inkwell-slash-command", handleSlashTrigger);
+    return () => window.removeEventListener("inkwell-slash-command", handleSlashTrigger);
+  }, [editor, chapters, activeChapter?.id, directorsNote]); // Keep dependencies refreshed for structural auto-saves
   
   const [activeTab, setActiveTab] = useState<"muse" | "checker" | "characters">("muse");
   const [isReviewLoading, setIsReviewLoading] = useState(false);
