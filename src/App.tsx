@@ -14,6 +14,7 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { KeyboardTriggerExtension } from "./lib/KeyboardTriggerExtension";
+import { LorebookDrawer } from "./components/LorebookDrawer";
 
 // --- Components ---
 
@@ -870,7 +871,16 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [reviewLoadingStep, setReviewLoadingStep] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [characters, setCharacters] = useState<CharacterProfile[]>([]);
-  const [lorebook, setLorebook] = useState<LoreEntry[]>([]);
+  const [isLoreOpen, setIsLoreOpen] = useState(false);
+  const [lorebook, setLorebook] = useState<LoreEntry[]>(() => {
+    const saved = localStorage.getItem('inkwell_lorebook');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const handleUpdateLorebook = (updated: LoreEntry[]) => {
+    setLorebook(updated);
+    localStorage.setItem('inkwell_lorebook', JSON.stringify(updated));
+  };
 
   useEffect(() => {
     if (saveStatus === "saved") {
@@ -929,42 +939,7 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     });
   }, [story.id]);
 
-  useEffect(() => {
-    if (!story?.id) return;
 
-    if (isOfflineMode) {
-      const loadLorebook = () => {
-        const stored = localStorage.getItem("inkwell_lore");
-        if (stored) {
-          try {
-            const list = JSON.parse(stored) as (LoreEntry & { storyId: string })[];
-            const filtered = list.filter(c => c.storyId === story.id);
-            // Sort by keyword
-            const sorted = filtered.sort((a, b) => a.keyword.localeCompare(b.keyword));
-            setLorebook(sorted);
-          } catch (e) {
-            console.error("Failed to parse local lorebook", e);
-          }
-        } else {
-          setLorebook([]);
-        }
-      };
-      loadLorebook();
-      window.addEventListener("inkwell_db_changed", loadLorebook);
-      return () => {
-        window.removeEventListener("inkwell_db_changed", loadLorebook);
-      };
-    }
-
-    const q = query(collection(db, `stories/${story.id}/lore`));
-    return onSnapshot(q, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as LoreEntry));
-      const sorted = data.sort((a, b) => a.keyword.localeCompare(b.keyword));
-      setLorebook(sorted);
-    }, (error) => {
-      console.error("Lorebook subscription failed:", error);
-    });
-  }, [story.id]);
 
   const addCharacter = async (name: string, role: string, traits: string) => {
     try {
@@ -1036,47 +1011,25 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
   const addLoreEntry = async (keyword: string, description: string) => {
     try {
-      const newEntry = {
+      const newEntry: LoreEntry = {
+        id: "lore_" + Math.random().toString(36).substring(2, 9),
         storyId: story.id,
         keyword: keyword.trim() || "New Keyword",
         description: description.trim() || "Details...",
-        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
-        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        createdAt: { seconds: Date.now() / 1000 },
+        updatedAt: { seconds: Date.now() / 1000 },
       };
-
-      if (isOfflineMode) {
-        const id = "lore_" + Math.random().toString(36).substring(2, 9);
-        const stored = localStorage.getItem("inkwell_lore");
-        const list = stored ? JSON.parse(stored) : [];
-        list.push({ ...newEntry, id });
-        localStorage.setItem("inkwell_lore", JSON.stringify(list));
-        window.dispatchEvent(new Event("inkwell_db_changed"));
-      } else {
-        await addDoc(collection(db, `stories/${story.id}/lore`), newEntry);
-      }
+      const updated = [...lorebook, newEntry];
+      handleUpdateLorebook(updated);
     } catch (error: any) {
       console.error("Lore entry addition failed:", error);
-      alert(`Could not add lore: ${error.message || error}`);
     }
   };
 
   const updateLoreEntry = async (id: string, fields: Partial<LoreEntry>) => {
     try {
-      if (isOfflineMode) {
-        const stored = localStorage.getItem("inkwell_lore");
-        if (stored) {
-          const list = JSON.parse(stored) as (LoreEntry & { storyId: string })[];
-          const idx = list.findIndex(c => c.id === id);
-          if (idx !== -1) {
-            list[idx] = { ...list[idx], ...fields, updatedAt: { seconds: Date.now() / 1000 } };
-            localStorage.setItem("inkwell_lore", JSON.stringify(list));
-            window.dispatchEvent(new Event("inkwell_db_changed"));
-          }
-        }
-      } else {
-        const docRef = doc(db, `stories/${story.id}/lore`, id);
-        await updateDoc(docRef, { ...fields, updatedAt: serverTimestamp() });
-      }
+      const updated = lorebook.map(entry => entry.id === id ? { ...entry, ...fields, updatedAt: { seconds: Date.now() / 1000 } } : entry);
+      handleUpdateLorebook(updated);
     } catch (error: any) {
       console.error("Lore entry update failed:", error);
     }
@@ -1084,18 +1037,8 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
   const deleteLoreEntry = async (id: string) => {
     try {
-      if (isOfflineMode) {
-        const stored = localStorage.getItem("inkwell_lore");
-        if (stored) {
-          const list = JSON.parse(stored) as (LoreEntry & { storyId: string })[];
-          const filtered = list.filter(c => c.id !== id);
-          localStorage.setItem("inkwell_lore", JSON.stringify(filtered));
-          window.dispatchEvent(new Event("inkwell_db_changed"));
-        }
-      } else {
-        const docRef = doc(db, `stories/${story.id}/lore`, id);
-        await deleteDoc(docRef);
-      }
+      const updated = lorebook.filter(entry => entry.id !== id);
+      handleUpdateLorebook(updated);
     } catch (error: any) {
       console.error("Lore entry deletion failed:", error);
     }
@@ -1516,15 +1459,27 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
             </AnimatePresence>
 
             {activeChapter && (
-              <button
-                id="export-pdf-btn"
-                onClick={handleExportPDF}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-earth/[0.02] border border-border-subtle rounded-xl text-[10px] font-sans font-bold uppercase tracking-wider text-earth hover:text-sage hover:border-sage/40 transition-all shadow-sm active:scale-95 shrink-0"
-                title="Export Chapter to Clean PDF"
-              >
-                <Download className="w-3 h-3" />
-                <span>Export PDF</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  id="toggle-lore-drawer-btn"
+                  onClick={() => setIsLoreOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-earth hover:bg-sage text-white rounded-xl text-[10px] font-sans font-bold uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0"
+                  title="Open Sliding Lorebook Drawer"
+                >
+                  <BookMarked className="w-3 h-3" />
+                  <span>Brain / Lore</span>
+                </button>
+
+                <button
+                  id="export-pdf-btn"
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-earth/[0.02] border border-border-subtle rounded-xl text-[10px] font-sans font-bold uppercase tracking-wider text-earth hover:text-sage hover:border-sage/40 transition-all shadow-sm active:scale-95 shrink-0"
+                  title="Export Chapter to Clean PDF"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Export PDF</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1940,6 +1895,13 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
           </div>
         </div>
       </div>
+
+      <LorebookDrawer 
+        isOpen={isLoreOpen} 
+        onClose={() => setIsLoreOpen(false)} 
+        lorebook={lorebook} 
+        onUpdateLorebook={handleUpdateLorebook} 
+      />
     </div>
   );
 }
