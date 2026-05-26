@@ -494,15 +494,25 @@ function ReadabilityAnalysis({ content }: { content: string }) {
   );
 }
 
-function Navbar({ user, onBrandClick }: { user: any; onBrandClick?: () => void }) {
+function Navbar({ user, onBrandClick, onLoginSuccess }: { user: any; onBrandClick?: () => void; onLoginSuccess: (user: any) => void }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   const handleSignIn = async () => {
     setIsSigningIn(true);
     try {
-      await signIn();
+      const u = await signIn();
+      if (u) {
+        onLoginSuccess(u);
+      }
     } catch (err) {
-      console.error("Auth helper failed:", err);
+      console.error("Auth helper failed, falling back to local guest scribe:", err);
+      const fallbackGuest = {
+        uid: "local_scribe_guest",
+        displayName: "Local Guest Scribe",
+        isAnonymous: true,
+      };
+      localStorage.setItem("inkwell_guest_user", JSON.stringify(fallbackGuest));
+      onLoginSuccess(fallbackGuest);
     } finally {
       setIsSigningIn(false);
     }
@@ -561,15 +571,33 @@ function Navbar({ user, onBrandClick }: { user: any; onBrandClick?: () => void }
   );
 }
 
-function Landing() {
+function Landing({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   const handleStart = async () => {
     setIsSigningIn(true);
     try {
-      await signIn();
+      const u = await signIn();
+      if (u) {
+        onLoginSuccess(u);
+      } else {
+        const fallbackGuest = {
+          uid: "local_scribe_guest",
+          displayName: "Local Guest Scribe",
+          isAnonymous: true,
+        };
+        localStorage.setItem("inkwell_guest_user", JSON.stringify(fallbackGuest));
+        onLoginSuccess(fallbackGuest);
+      }
     } catch (err) {
-      console.error("Landing sign-in failed:", err);
+      console.error("Landing sign-in failed, falling back to local guest scribe:", err);
+      const fallbackGuest = {
+        uid: "local_scribe_guest",
+        displayName: "Local Guest Scribe",
+        isAnonymous: true,
+      };
+      localStorage.setItem("inkwell_guest_user", JSON.stringify(fallbackGuest));
+      onLoginSuccess(fallbackGuest);
     } finally {
       setIsSigningIn(false);
     }
@@ -931,6 +959,7 @@ function Editor({
   setLorebook: React.Dispatch<React.SetStateAction<LoreEntry[]>>; 
   handleUpdateLorebook: (updated: LoreEntry[]) => void; 
 }) {
+  const isLocalStorageMode = isOfflineMode || story.authorId === "local_scribe_guest";
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -1078,7 +1107,7 @@ function Editor({
           if (lastActiveChapterIdRef.current) {
             setSaveStatus("saving");
             const storedChapters = localStorage.getItem("inkwell_chapters");
-            if (isOfflineMode && storedChapters) {
+            if (isLocalStorageMode && storedChapters) {
               const list = JSON.parse(storedChapters) as Chapter[];
               const idx = list.findIndex(c => c.id === lastActiveChapterIdRef.current);
               if (idx !== -1) {
@@ -1086,7 +1115,7 @@ function Editor({
                 localStorage.setItem("inkwell_chapters", JSON.stringify(list));
                 window.dispatchEvent(new Event("inkwell_db_changed"));
               }
-            } else if (!isOfflineMode) {
+            } else if (!isLocalStorageMode) {
               const docRef = doc(db, `stories/${story.id}/chapters`, lastActiveChapterIdRef.current);
               updateDoc(docRef, { content: plainText, updatedAt: serverTimestamp() }).catch(console.error);
             }
@@ -1215,7 +1244,7 @@ function Editor({
   useEffect(() => {
     if (!story?.id) return;
 
-    if (isOfflineMode) {
+    if (isLocalStorageMode) {
       const loadCharacters = () => {
         const stored = localStorage.getItem("inkwell_characters");
         if (stored) {
@@ -1258,11 +1287,11 @@ function Editor({
         name: name.trim() || "New Character",
         role: role.trim() || "Secondary Character",
         traits: traits.trim() || "Intriguing traits...",
-        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
-        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        createdAt: isLocalStorageMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isLocalStorageMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
       };
 
-      if (isOfflineMode) {
+      if (isLocalStorageMode) {
         const id = "char_" + Math.random().toString(36).substring(2, 9);
         const stored = localStorage.getItem("inkwell_characters");
         const list = stored ? JSON.parse(stored) : [];
@@ -1280,7 +1309,7 @@ function Editor({
 
   const updateCharacter = async (charId: string, fields: Partial<CharacterProfile>) => {
     try {
-      if (isOfflineMode) {
+      if (isLocalStorageMode) {
         const stored = localStorage.getItem("inkwell_characters");
         if (stored) {
           const list = JSON.parse(stored) as CharacterProfile[];
@@ -1302,7 +1331,7 @@ function Editor({
 
   const deleteCharacter = async (charId: string) => {
     try {
-      if (isOfflineMode) {
+      if (isLocalStorageMode) {
         const stored = localStorage.getItem("inkwell_characters");
         if (stored) {
           const list = JSON.parse(stored) as CharacterProfile[];
@@ -1357,7 +1386,7 @@ function Editor({
   useEffect(() => {
     if (!story?.id) return;
 
-    if (isOfflineMode) {
+    if (isLocalStorageMode) {
       const loadChapters = () => {
         const stored = localStorage.getItem("inkwell_chapters");
         if (stored) {
@@ -1403,12 +1432,12 @@ function Editor({
         content: "",
         order: chapters.length + 1,
         authorId: auth.currentUser?.uid || "local_scribe_guest",
-        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
-        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        createdAt: isLocalStorageMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isLocalStorageMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
       };
 
       let id = "";
-      if (isOfflineMode) {
+      if (isLocalStorageMode) {
         id = "chapter_" + Math.random().toString(36).substring(2, 9);
         const stored = localStorage.getItem("inkwell_chapters");
         const list = stored ? JSON.parse(stored) : [];
@@ -1431,7 +1460,7 @@ function Editor({
     if (!activeChapter) return;
     setSaveStatus("saving");
     try {
-      if (isOfflineMode) {
+      if (isLocalStorageMode) {
         const stored = localStorage.getItem("inkwell_chapters");
         if (stored) {
           const list = JSON.parse(stored) as Chapter[];
@@ -2399,31 +2428,33 @@ export default function App() {
   };
 
   useEffect(() => {
+    const getCachedLocalUser = () => {
+      try {
+        const cached = localStorage.getItem("inkwell_guest_user");
+        return cached ? JSON.parse(cached) : null;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const explicitlySignedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
+
     if (isOfflineMode) {
       const checkLocalUser = () => {
-        let cached = localStorage.getItem("inkwell_guest_user");
-        const explicitlySignedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
+        let cached = getCachedLocalUser();
+        const loggedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
         
-        if (!cached && !explicitlySignedOut) {
-          // Auto-sign in as guest on first cold-load for seamless entry!
+        if (!cached && !loggedOut) {
           const guestUser = {
             uid: "local_scribe_guest",
             displayName: "Local Scribe",
             isAnonymous: true,
           };
           localStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
-          cached = JSON.stringify(guestUser);
+          cached = guestUser;
         }
         
-        if (cached) {
-          try {
-            setUser(JSON.parse(cached));
-          } catch (_) {
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
+        setUser(cached);
       };
       checkLocalUser();
       window.addEventListener("storage_auth_changed", checkLocalUser);
@@ -2432,17 +2463,29 @@ export default function App() {
       };
     }
 
+    // Initialize with local fallback if guest is already cached
+    const localUser = getCachedLocalUser();
+    if (localUser && !explicitlySignedOut) {
+      setUser(localUser);
+    }
+
     return auth.onAuthStateChanged((u) => {
-      const explicitlySignedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
+      const loggedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
       if (u) {
         setUser(u);
-      } else if (!explicitlySignedOut) {
+      } else if (!loggedOut) {
         // Auto sign-in anonymously for an unimpeded live preview experience
         import("./lib/firebase").then(({ signInGuest }) => {
           signInGuest().then((guest) => {
             setUser(guest);
           }).catch((err) => {
-            console.error("Auto guest sign-in failed:", err);
+            console.error("Auto guest sign-in failed, falling back to local storage guest:", err);
+            const fallbackGuest = {
+              uid: "local_scribe_guest",
+              displayName: "Local Guest Scribe",
+              isAnonymous: true,
+            };
+            setUser(fallbackGuest);
           });
         });
       } else {
@@ -2458,7 +2501,7 @@ export default function App() {
       return;
     }
 
-    if (isOfflineMode) {
+    if (isOfflineMode || user.uid === "local_scribe_guest") {
       const loadStories = () => {
         const stored = localStorage.getItem("inkwell_stories");
         if (stored) {
@@ -2498,18 +2541,19 @@ export default function App() {
 
   const handleCreate = async (title: string, genre: string, description: string = "", initialChapterContent: string = "") => {
     if (!user) return;
+    const isLocalMode = isOfflineMode || user.uid === "local_scribe_guest";
     try {
       const newStoryData = {
         title: title.trim(),
         description: description || "",
         genre: genre || "General Fiction",
         authorId: user.uid,
-        createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
-        updatedAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        createdAt: isLocalMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
+        updatedAt: isLocalMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
       };
       
       let id = "";
-      if (isOfflineMode) {
+      if (isLocalMode) {
         id = "story_" + Math.random().toString(36).substring(2, 9);
         const stored = localStorage.getItem("inkwell_stories");
         const list = stored ? JSON.parse(stored) : [];
@@ -2569,11 +2613,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-paper font-sans selection:bg-olive/20 selection:text-olive">
-      <Navbar user={user} onBrandClick={selectedStory ? () => setSelectedStory(null) : undefined} />
+      <Navbar user={user} onBrandClick={selectedStory ? () => setSelectedStory(null) : undefined} onLoginSuccess={setUser} />
       
       <main>
         {!user ? (
-          <Landing />
+          <Landing onLoginSuccess={setUser} />
         ) : selectedStory ? (
           <Editor 
             story={selectedStory} 
