@@ -650,98 +650,266 @@ function Dashboard({
     }
   ];
 
+  const writingPrompts = [
+    "Focus deeply on sensory details (sounds, visual textures, lighting) to let scenes breathe.",
+    "Analyze the character's internal thoughts and the immediate physical surroundings before moving plot lines forward.",
+    "Show, don't tell: Do not rush to resolve a conflict. Focus on cadence, sentence length, and pacing.",
+    "Ensure prose voices are contextually seamless with the established story architecture.",
+    "Maintain raw story prose: Avoid any clinical conversational filler, introductions, or markdown headers."
+  ];
+
+  const [totalChapters, setTotalChapters] = useState(0);
+  const [totalLore, setTotalLore] = useState(0);
+  const [scratchpad, setScratchpad] = useState(() => {
+    return localStorage.getItem("inkwell_scratchpad") || "";
+  });
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [greeting, setGreeting] = useState("Welcome back, Scribe.");
+
+  useEffect(() => {
+    // Generate organic time-based greeting
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreeting("Good morning, Scribe. The morning air resides, and the canvas remains clean.");
+    } else if (hour < 18) {
+      setGreeting("Good afternoon, Scribe. The ink is fresh; focus on visual textures and let scenes breathe.");
+    } else {
+      setGreeting("Good evening, Scribe. The gaslights sputter, and your characters begin to whispers.");
+    }
+
+    // Read total chapters count
+    try {
+      const storedChs = localStorage.getItem("inkwell_chapters");
+      if (storedChs) {
+        setTotalChapters(JSON.parse(storedChs).length);
+      }
+    } catch (_) {}
+
+    // Read total lore elements
+    try {
+      const storedLore = localStorage.getItem("inkwell_lorebook");
+      if (storedLore) {
+        setTotalLore(JSON.parse(storedLore).length);
+      }
+    } catch (_) {}
+  }, [stories]);
+
+  const handleScratchpadChange = (val: string) => {
+    setScratchpad(val);
+    localStorage.setItem("inkwell_scratchpad", val);
+  };
+
+  const nextPrompt = () => {
+    setPromptIndex((prev) => (prev + 1) % writingPrompts.length);
+  };
+
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
+    <div className="max-w-7xl mx-auto px-6 py-12">
+      {/* Immersive Welcome Hero */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 pb-6 border-b border-border-subtle gap-6 animate-fade-in">
         <div>
-          <div className="text-[11px] uppercase tracking-[2px] text-earth opacity-40 font-bold mb-2">Workspace / Library</div>
-          <h2 className="font-serif text-5xl font-light text-earth">Selected Works</h2>
+          <div className="text-[10px] uppercase tracking-[2px] text-sage font-extrabold mb-1">Creative Suite Studio</div>
+          <h2 className="font-serif text-4xl text-earth italic font-light max-w-2xl leading-tight">
+            {greeting}
+          </h2>
         </div>
         <button
           onClick={onCreate}
-          className="flex items-center gap-2 px-8 py-4 bg-sage text-white rounded-xl font-semibold hover:shadow-xl hover:shadow-sage/20 transition-all cursor-pointer"
+          className="flex items-center gap-2.5 px-6 py-3 bg-sage text-white rounded-xl font-bold tracking-wide hover:bg-earth transition-all cursor-pointer shadow-md shadow-sage/10 text-xs uppercase"
         >
           <PenTool className="w-4 h-4" />
           Create Custom Manuscript
         </button>
       </div>
 
-      {stories.length === 0 ? (
-        <div className="space-y-12">
-          <div className="border border-dashed border-border-subtle rounded-3xl p-16 text-center bg-white/50">
-            <BookOpen className="w-10 h-10 text-earth/20 mx-auto mb-4" />
-            <h4 className="font-serif text-2xl text-earth mb-2">Your Archive is Empty</h4>
-            <p className="text-earth/60 max-w-md mx-auto text-sm leading-relaxed font-sans mb-6">
-              Establish a custom workspace from scratch, or kickstart your imagination with one of our curated high-concept story blueprints below.
-            </p>
-            <button
-              onClick={onCreate}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-earth text-white rounded-xl font-medium hover:bg-sage transition-all text-xs uppercase tracking-wider cursor-pointer shadow-md"
-            >
-              <PenTool className="w-3.5 h-3.5" />
-              Create Custom Manuscript
-            </button>
+      {/* Quick Stats Banner */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-12">
+        <div className="bg-white/40 border border-border-subtle rounded-2xl p-5 flex items-center gap-4">
+          <div className="p-3.5 bg-sage/10 rounded-xl">
+            <BookOpen className="w-5 h-5 text-sage" />
+          </div>
+          <div>
+            <div className="text-[20px] font-serif font-semibold text-earth">{stories.length}</div>
+            <div className="text-[10px] uppercase tracking-wider text-earth/50 font-bold">Manuscripts Active</div>
+          </div>
+        </div>
+
+        <div className="bg-white/40 border border-border-subtle rounded-2xl p-5 flex items-center gap-4">
+          <div className="p-3.5 bg-earth/5 rounded-xl">
+            <Layers className="w-5 h-5 text-earth/70" />
+          </div>
+          <div>
+            <div className="text-[20px] font-serif font-semibold text-earth">{totalChapters || (stories.length * 1)}</div>
+            <div className="text-[10px] uppercase tracking-wider text-earth/50 font-bold">Chapters Penned</div>
+          </div>
+        </div>
+
+        <div className="bg-white/40 border border-border-subtle rounded-2xl p-5 col-span-2 md:col-span-1 flex items-center gap-4">
+          <div className="p-3.5 bg-sage/10 rounded-xl">
+            <BookMarked className="w-5 h-5 text-sage" />
+          </div>
+          <div>
+            <div className="text-[20px] font-serif font-semibold text-earth">{totalLore || 2}</div>
+            <div className="text-[10px] uppercase tracking-wider text-earth/50 font-bold">World Chronicles</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Grid Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        
+        {/* Left 2 Cols: Manuscripts and Blueprints */}
+        <div className="lg:col-span-2 space-y-12">
+          
+          {/* Section: Your Selected Works */}
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[10px] uppercase font-bold text-earth/40 tracking-[2px] flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-earth/40" /> Your Active Archives
+              </span>
+            </div>
+
+            {stories.length === 0 ? (
+              <div className="border border-dashed border-border-subtle rounded-3xl p-16 text-center bg-white/50 mb-10">
+                <BookOpen className="w-10 h-10 text-earth/20 mx-auto mb-4" />
+                <h4 className="font-serif text-2xl text-earth mb-2">Your Archive is Empty</h4>
+                <p className="text-earth/60 max-w-md mx-auto text-sm leading-relaxed font-sans mb-6">
+                  Establish a custom workspace from scratch, or kickstart your imagination with one of our curated high-concept story blueprints.
+                </p>
+                <button
+                  onClick={onCreate}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-earth text-white rounded-xl font-medium hover:bg-sage transition-all text-xs uppercase tracking-wider cursor-pointer shadow-md"
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  Create Custom Manuscript
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {stories.map((story) => (
+                  <motion.div
+                    key={story.id}
+                    layoutId={story.id}
+                    onClick={() => onSelect(story)}
+                    className="group cursor-pointer bg-white border border-border-subtle hover:border-sage/40 rounded-2xl p-8 hover:shadow-xl hover:shadow-earth/[0.03] transition-all flex flex-col justify-between min-h-[220px]"
+                  >
+                    <div>
+                      <span className="text-[9px] uppercase tracking-[1.5px] text-sage font-extrabold mb-4 block">
+                        {story.genre || "GENERAL FICTION"}
+                      </span>
+                      <h3 className="font-serif text-2xl mb-2 text-earth group-hover:text-sage transition-colors leading-tight font-medium">
+                        {story.title}
+                      </h3>
+                      <p className="text-earth/60 line-clamp-3 text-xs leading-relaxed mb-6 font-serif italic">
+                        {story.description || "Open workspace to define character lore and start drafting chapter paragraphs..."}
+                      </p>
+                    </div>
+                    <div className="flex justify-between items-center pt-4 border-t border-border-subtle/50">
+                      <span className="text-[9px] uppercase font-bold text-earth/30 tracking-wider">
+                        Updated {story.updatedAt?.seconds ? new Date(story.updatedAt.seconds * 1000).toLocaleDateString() : 'Just now'}
+                      </span>
+                      <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-earth/50 group-hover:text-sage transition-colors">
+                        <span>Pen Story</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-earth/20 group-hover:translate-x-1 group-hover:text-sage transition-all" />
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div>
+          {/* Section: Start Writing Instantly from a Blueprint */}
+          <div className="pt-4 border-t border-border-subtle/40">
             <span className="text-[10px] uppercase font-bold text-sage tracking-[2px] mb-6 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> Start Writing Instantly from a Blueprint
+              <Sparkles className="w-3.5 h-3.5 text-sage" /> Start Writing Instantly from a Blueprint
             </span>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
               {blueprints.map((bp) => (
                 <div
                   key={bp.title}
                   onClick={() => onInstantCreate(bp.title, bp.genre, bp.description, bp.initContent)}
-                  className="group cursor-pointer bg-white border border-border-subtle hover:border-sage/40 rounded-2xl p-8 hover:shadow-xl hover:shadow-earth/[0.03] transition-all flex flex-col justify-between"
+                  className="group cursor-pointer bg-white border border-border-subtle hover:border-sage/40 rounded-2xl p-6 hover:shadow-xl hover:shadow-earth/[0.03] transition-all flex flex-col justify-between"
                 >
                   <div>
-                    <span className="text-[9px] uppercase tracking-[1.5px] text-sage font-extrabold mb-4 block">
+                    <span className="text-[8px] uppercase tracking-[1.5px] text-sage font-extrabold mb-3 block">
                       {bp.genre}
                     </span>
-                    <h4 className="font-serif text-2xl mb-3 text-earth group-hover:text-sage transition-colors leading-tight">
+                    <h4 className="font-serif text-xl mb-2 text-earth group-hover:text-sage transition-colors leading-tight font-medium">
                       {bp.title}
                     </h4>
-                    <p className="text-ink/65 text-xs leading-relaxed mb-6 font-serif italic line-clamp-4">
+                    <p className="text-ink/65 text-[11px] leading-relaxed mb-5 font-serif italic line-clamp-3">
                       {bp.description}
                     </p>
                   </div>
-                  <div className="pt-4 border-t border-border-subtle/40 flex justify-between items-center text-[10px] uppercase font-bold text-earth/50 group-hover:text-sage transition-colors">
-                    <span>Draft Story</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-earth/20 group-hover:translate-x-1 group-hover:text-sage transition-all" />
+                  <div className="pt-3 border-t border-border-subtle/40 flex justify-between items-center text-[9px] uppercase font-bold text-earth/50 group-hover:text-sage transition-colors">
+                    <span>Quick Draft</span>
+                    <ChevronRight className="w-3 h-3 text-earth/20 group-hover:translate-x-1 group-hover:text-sage transition-all" />
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-          {stories.map((story) => (
-            <motion.div
-              key={story.id}
-              layoutId={story.id}
-              onClick={() => onSelect(story)}
-              className="group cursor-pointer bg-white border border-border-subtle rounded-2xl p-10 hover:shadow-2xl hover:shadow-earth/5 transition-all flex flex-col justify-between"
-            >
-              <div>
-                <span className="text-[10px] uppercase tracking-[1.5px] text-sage font-bold mb-6 block">
-                  {story.genre || "GENERAL FICTION"}
-                </span>
-                <h3 className="font-serif text-3xl mb-4 text-earth group-hover:text-sage transition-colors leading-tight">{story.title}</h3>
-                <p className="text-ink/60 line-clamp-3 text-sm leading-relaxed mb-6 font-serif italic">
-                  {story.description || "Describe the core of this tale..."}
-                </p>
+
+        {/* Right 1 Col: Desk Accessories & Persistence Pad */}
+        <div className="space-y-8">
+          
+          {/* Custom Brainstorm Note Pad */}
+          <div className="bg-white border border-border-subtle rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[300px]">
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <FileText className="w-4 h-4 text-sage" />
+                <h4 className="font-serif text-lg text-earth font-medium">Desk Note Scratchpad</h4>
               </div>
-              <div className="flex justify-between items-center pt-8 border-t border-border-subtle">
-                <span className="text-[10px] uppercase font-bold text-earth/30 tracking-wider">
-                  Updated {story.updatedAt?.seconds ? new Date(story.updatedAt.seconds * 1000).toLocaleDateString() : 'Just now'}
+              <p className="text-[10px] text-earth/50 leading-relaxed font-sans mb-4">
+                Rapid scene thoughts, character snippets, and local narrative guidelines. Data is auto-saved.
+              </p>
+              
+              <textarea
+                value={scratchpad}
+                onChange={(e) => handleScratchpadChange(e.target.value)}
+                placeholder="Type brainstorming thoughts or story snippets here..."
+                className="w-full bg-paper border border-border-subtle/70 rounded-xl p-4 text-xs font-serif leading-relaxed min-h-[180px] focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth placeholder-earth/30 resize-none"
+              />
+            </div>
+            
+            <div className="pt-3 border-t border-border-subtle/40 text-[9px] uppercase tracking-wider font-bold text-sage/80 flex items-center justify-between">
+              <span>● Status Offline / Local Only</span>
+              <span className="text-[10px]">{scratchpad.length} Chars</span>
+            </div>
+          </div>
+
+          {/* Prompt / Daily Inspiration Widget */}
+          <div className="bg-sage/10 rounded-2xl p-6 border border-sage/20 relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[9px] uppercase tracking-[1.5px] font-extrabold text-sage flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-sage" /> Scribe Guidelines
                 </span>
-                <ChevronRight className="w-4 h-4 text-earth/20 group-hover:translate-x-1 group-hover:text-sage transition-all" />
+                <button 
+                  onClick={nextPrompt}
+                  className="p-1 hover:bg-sage/10 rounded-lg text-sage transition-colors cursor-pointer"
+                  title="Next Cue"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 pointer-events-auto" />
+                </button>
               </div>
-            </motion.div>
-          ))}
+              
+              <p className="font-serif text-earth text-sm italic leading-relaxed mb-4 min-h-[60px]">
+                "{writingPrompts[promptIndex]}"
+              </p>
+            </div>
+
+            <div className="text-[9px] text-earth/45 font-sans">
+              Designed as Inkwell's Elite Co-Writer Guidelines.
+            </div>
+          </div>
+
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
