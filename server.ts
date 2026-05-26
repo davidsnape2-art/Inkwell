@@ -25,7 +25,7 @@ async function startServer() {
   // API Route: Elite Co-Writer Continuation (Seamless text flow)
   app.post("/api/generate-next", async (req, res) => {
     try {
-      const { currentText, note, lorebook } = req.body;
+      const { currentText, note, lorebook, remainingBeats } = req.body;
 
       if (!currentText) {
         return res.status(400).json({ error: "Text context is required." });
@@ -35,7 +35,7 @@ async function startServer() {
         "You are Inkwell's Elite Co-Writer. Your job is to seamlessly continue the user's story. " +
         "Mimic their voice, cadence, sentence structures, and tone precisely. Focus deeply on sensory " +
         "details and internal tracking of thoughts. Do not include any conversational filler, " +
-        "introductory phrases, or markdown headers. Output ONLY the raw story prose."
+        "introductory phrases, or markdown headers. Output ONLY the raw story prose. You are a professional long-form novelist co-writing an immersive narrative story."
       );
 
       // Scan the text for active character / lore references inside lorebook
@@ -54,6 +54,19 @@ async function startServer() {
 
       if (matchedLore.length > 0) {
         systemInstruction += `\n\nCRITICAL CHARACTER/LORE FACTS TO ENFORCE:\n${matchedLore.join("\n")}\nKeep these details 100% consistent in the next paragraph.`;
+      }
+
+      if (remainingBeats && Array.isArray(remainingBeats) && remainingBeats.length > 0) {
+        systemInstruction += `
+\n\nUPCOMING CHAPTER PLOT OBJECTIVES:
+The author has established a list of scene goals. Your highest priority is to fulfill the VERY FIRST objective listed below while subtly building momentum for the rest. Do not skip ahead or execute them all at once.
+
+Next Objective to Write: "${remainingBeats[0]}"
+Subsequent targets to seed: ${remainingBeats.slice(1).map((b: any) => `"${b}"`).join(', ') || 'None'}
+
+Keep the prose voice contextually seamless with the established story architecture.`;
+      } else {
+        systemInstruction += "\n\nNo active plot beats are provided. Freely evaluate the text and continue writing the logical next paragraph beat.";
       }
 
       let contextBlock = "Continue the scene smoothly. Write exactly one robust paragraph. Do not rush the plot, stay in the current moment.";

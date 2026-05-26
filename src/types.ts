@@ -53,3 +53,10 @@ export interface LoreEntry {
   createdAt?: any;
   updatedAt?: any;
 }
+
+export interface OutlineItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+

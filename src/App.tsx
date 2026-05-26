@@ -5,7 +5,7 @@ import { LogIn, LogOut, BookOpen, PenTool, Sparkles, Trash2, ChevronRight, Save,
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "./lib/firebase";
-import { Story, Chapter, CharacterProfile, LoreEntry } from "./types";
+import { Story, Chapter, CharacterProfile, LoreEntry, OutlineItem } from "./types";
 import { cn, getAISuggestion, getAIReview, generateNext, modifySelection } from "./lib/utils";
 import ReactMarkdown from "react-markdown";
 import { jsPDF } from "jspdf";
@@ -672,12 +672,84 @@ function Dashboard({ stories, onCreate, onSelect }: { stories: Story[], onCreate
   );
 }
 
-function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
+function Editor({ 
+  story, 
+  onBack, 
+  isLoreOpen, 
+  setIsLoreOpen, 
+  lorebook, 
+  setLorebook, 
+  handleUpdateLorebook 
+}: { 
+  story: Story; 
+  onBack: () => void; 
+  isLoreOpen: boolean; 
+  setIsLoreOpen: (open: boolean) => void; 
+  lorebook: LoreEntry[]; 
+  setLorebook: React.Dispatch<React.SetStateAction<LoreEntry[]>>; 
+  handleUpdateLorebook: (updated: LoreEntry[]) => void; 
+}) {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // --- Chapter Outline Beat Sheet States & Persistence ---
+  const [outlines, setOutlines] = useState<Record<string, OutlineItem[]>>(() => {
+    const saved = localStorage.getItem('inkwell_outlines');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse inkwell_outlines", e);
+      }
+    }
+    return {
+      'mock-1': [
+        { id: 'b1', text: 'Establish the oppressive, melting heat of the racing tarmac', completed: true },
+        { id: 'b2', text: 'Introduce an unexpected vibration coming from the steering column', completed: false },
+        { id: 'b3', text: 'Force a sudden defensive driving maneuver as a rival cuts inside', completed: false }
+      ]
+    };
+  });
+  const [newBeatText, setNewBeatText] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem('inkwell_outlines', JSON.stringify(outlines));
+  }, [outlines]);
+
+  // --- Chapter Outline Beat Sheet Mutators ---
+  const handleAddBeat = (text: string) => {
+    if (!activeChapter || !text.trim()) return;
+    const newItem: OutlineItem = {
+      id: "beat_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 5),
+      text: text.trim(),
+      completed: false
+    };
+    setOutlines(prev => ({
+      ...prev,
+      [activeChapter.id]: [...(prev[activeChapter.id] || []), newItem]
+    }));
+  };
+
+  const toggleBeat = (beatId: string) => {
+    if (!activeChapter) return;
+    setOutlines(prev => ({
+      ...prev,
+      [activeChapter.id]: (prev[activeChapter.id] || []).map(beat => 
+        beat.id === beatId ? { ...beat, completed: !beat.completed } : beat
+      )
+    }));
+  };
+
+  const deleteBeat = (beatId: string) => {
+    if (!activeChapter) return;
+    setOutlines(prev => ({
+      ...prev,
+      [activeChapter.id]: (prev[activeChapter.id] || []).filter(beat => beat.id !== beatId)
+    }));
+  };
   
   const [directorsNote, setDirectorsNote] = useState("");
   const [isCoWriting, setIsCoWriting] = useState(false);
@@ -826,8 +898,14 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
     const currentText = editor.getText({ blockSeparator: "\n\n" });
     if (!currentText.trim()) return;
     setIsCoWriting(true);
+
+    const activeChecklist = outlines[activeChapter.id] || [];
+    const remainingBeats = activeChecklist
+      .filter(beat => !beat.completed)
+      .map(beat => beat.text);
+
     try {
-      const { suggestion } = await generateNext(currentText, directorsNote.trim(), lorebook);
+      const { suggestion } = await generateNext(currentText, directorsNote.trim(), lorebook, remainingBeats);
       if (suggestion && suggestion.trim()) {
         editor.chain().focus("end").insertContent(`<p>${suggestion.trim()}</p>`).run();
         setDirectorsNote("");
@@ -846,7 +924,7 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
   useEffect(() => {
     coWriteTriggerRef.current = handleCoWriteContinuation;
-  }, [directorsNote, isCoWriting]);
+  }, [directorsNote, isCoWriting, outlines, lorebook]);
 
   useEffect(() => {
     const handleSlashTrigger = (event: Event) => {
@@ -864,26 +942,13 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
 
     window.addEventListener("inkwell-slash-command", handleSlashTrigger);
     return () => window.removeEventListener("inkwell-slash-command", handleSlashTrigger);
-  }, [editor, chapters, activeChapter?.id, directorsNote]); // Keep dependencies refreshed for structural auto-saves
+  }, [editor, chapters, activeChapter?.id, directorsNote, outlines, lorebook]); // Keep dependencies refreshed for structural auto-saves
   
-  const [activeTab, setActiveTab] = useState<"muse" | "checker" | "characters" | "lorebook">("muse");
+  const [activeTab, setActiveTab] = useState<"muse" | "outline" | "checker" | "characters" | "lorebook">("outline");
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [reviewLoadingStep, setReviewLoadingStep] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [characters, setCharacters] = useState<CharacterProfile[]>([]);
-  const [isLoreOpen, setIsLoreOpen] = useState(false);
-  const [lorebook, setLorebook] = useState<LoreEntry[]>(() => {
-    const saved = localStorage.getItem('inkwell_lorebook');
-    return saved ? JSON.parse(saved) : [
-      { id: 'mock-1', keyword: 'Brian', description: 'Lead driver. Wears red gloves, calm under pressure.' },
-      { id: 'mock-2', keyword: 'Tarmac', description: 'Extremely hot, high deg, melting the soft compound tires.' }
-    ];
-  });
-
-  const handleUpdateLorebook = (updated: LoreEntry[]) => {
-    setLorebook(updated);
-    localStorage.setItem('inkwell_lorebook', JSON.stringify(updated));
-  };
 
   useEffect(() => {
     if (saveStatus === "saved") {
@@ -1636,6 +1701,17 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
               Muse
             </button>
             <button
+              onClick={() => setActiveTab("outline")}
+              className={cn(
+                "text-xs uppercase tracking-wider font-bold pb-2 transition-all border-b-2 flex items-center gap-1.5",
+                activeTab === "outline"
+                  ? "border-sage text-sage"
+                  : "border-transparent text-earth/30 hover:text-earth/60"
+              )}
+            >
+              Outline
+            </button>
+            <button
               onClick={() => setActiveTab("checker")}
               className={cn(
                 "text-xs uppercase tracking-wider font-bold pb-2 transition-all border-b-2 flex items-center gap-1.5",
@@ -1702,6 +1778,98 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
                   </div>
                 </div>
               )}
+            </div>
+          ) : activeTab === "outline" ? (
+            <div className="space-y-6 animate-fade-in text-earth">
+              <div className="bg-white/80 rounded-2xl p-6 border border-border-subtle shadow-xs">
+                <h3 className="text-sm font-serif italic text-earth mb-1">📋 Chapter Beat Sheet</h3>
+                <p className="text-[11px] text-earth/60/80 leading-relaxed font-sans mt-1">
+                  Unchecked plot beats actively guide Gemini's co-writing memory to keep the story on track.
+                </p>
+
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newBeatText.trim()) return;
+                    handleAddBeat(newBeatText);
+                    setNewBeatText("");
+                  }} 
+                  className="mt-4 flex gap-2"
+                >
+                  <input 
+                    type="text"
+                    value={newBeatText}
+                    onChange={(e) => setNewBeatText(e.target.value)}
+                    placeholder="New beat or plot point..."
+                    className="flex-1 px-3 py-2 bg-paper border border-border-subtle rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-sage/40 text-earth font-sans"
+                  />
+                  <button 
+                    type="submit"
+                    className="p-2 bg-sage hover:bg-earth text-white rounded-lg transition-all"
+                    title="Add Beat"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <span className="text-[10px] uppercase font-bold text-sage tracking-widest flex items-center gap-1.5">
+                  <Layers className="w-3 h-3 text-sage" /> Roadmap Beats ({activeChapter ? (outlines[activeChapter.id] || []).length : 0})
+                </span>
+
+                {!activeChapter ? (
+                  <div className="text-center py-12 px-5 border border-dashed border-border-subtle rounded-2xl bg-paper/20 animate-fade-in">
+                    <AlertTriangle className="w-5 h-5 text-earth/20 mx-auto mb-2" />
+                    <p className="text-[10px] font-bold text-earth/45 uppercase tracking-[2px] leading-relaxed">
+                      Select a chapter to review outlines!
+                    </p>
+                  </div>
+                ) : (outlines[activeChapter.id] || []).length === 0 ? (
+                  <div className="text-center py-12 px-5 border border-dashed border-border-subtle rounded-2xl bg-paper/20 animate-fade-in">
+                    <Layers className="w-5 h-5 text-earth/20 mx-auto mb-2" />
+                    <p className="text-[10px] font-bold text-earth/45 uppercase tracking-[2px] p-2 leading-relaxed">
+                      No plot beats logged. Write story roadmap beats above to steer continuing draft streams!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 animate-fade-in">
+                    {(outlines[activeChapter.id] || []).map((beat) => (
+                      <div 
+                        key={beat.id}
+                        className={cn(
+                          "flex items-start gap-3 p-3.5 rounded-xl transition-all border",
+                          beat.completed 
+                            ? "bg-earth/[0.01] border-border-subtle/40" 
+                            : "bg-white border-sage/10 hover:border-sage/25 shadow-xs"
+                        )}
+                      >
+                        <input 
+                          type="checkbox"
+                          checked={beat.completed}
+                          onChange={() => toggleBeat(beat.id)}
+                          className="mt-0.5 rounded text-sage focus:ring-sage/40 cursor-pointer h-3.5 w-3.5 border-border-subtle accent-sage"
+                        />
+                        <span className={cn(
+                          "flex-1 text-xs leading-relaxed transition-all font-sans",
+                          beat.completed 
+                            ? "line-through text-earth/30" 
+                            : "text-earth font-medium"
+                        )}>
+                          {beat.text}
+                        </span>
+                        <button 
+                          onClick={() => deleteBeat(beat.id)}
+                          className="p-0.5 text-earth/30 hover:text-earth transition-colors"
+                          title="Remove plot point"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : activeTab === "checker" ? (
             <div className="space-y-6 animate-fade-in">
@@ -1898,13 +2066,6 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
           </div>
         </div>
       </div>
-
-      <LorebookDrawer 
-        isOpen={isLoreOpen} 
-        onClose={() => setIsLoreOpen(false)} 
-        lorebook={lorebook} 
-        onUpdateLorebook={handleUpdateLorebook} 
-      />
     </div>
   );
 }
@@ -1980,6 +2141,20 @@ export default function App() {
   const [stories, setStories] = useState<Story[]>([]);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [isLoreOpen, setIsLoreOpen] = useState(false);
+  const [lorebook, setLorebook] = useState<LoreEntry[]>(() => {
+    const saved = localStorage.getItem('inkwell_lorebook');
+    return saved ? JSON.parse(saved) : [
+      { id: 'mock-1', keyword: 'Brian', description: 'Lead driver. Wears red gloves, calm under pressure.' },
+      { id: 'mock-2', keyword: 'Tarmac', description: 'Extremely hot, high deg, melting the soft compound tires.' }
+    ];
+  });
+
+  const handleUpdateLorebook = (updated: LoreEntry[]) => {
+    setLorebook(updated);
+    localStorage.setItem('inkwell_lorebook', JSON.stringify(updated));
+  };
 
   useEffect(() => {
     if (isOfflineMode) {
@@ -2101,7 +2276,15 @@ export default function App() {
         {!user ? (
           <Landing />
         ) : selectedStory ? (
-          <Editor story={selectedStory} onBack={() => setSelectedStory(null)} />
+          <Editor 
+            story={selectedStory} 
+            onBack={() => setSelectedStory(null)} 
+            isLoreOpen={isLoreOpen}
+            setIsLoreOpen={setIsLoreOpen}
+            lorebook={lorebook}
+            setLorebook={setLorebook}
+            handleUpdateLorebook={handleUpdateLorebook}
+          />
         ) : (
           <Dashboard stories={stories} onCreate={() => setIsModalOpen(true)} onSelect={setSelectedStory} />
         )}
@@ -2124,6 +2307,13 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <LorebookDrawer 
+        isOpen={isLoreOpen} 
+        onClose={() => setIsLoreOpen(false)} 
+        lorebook={lorebook} 
+        onUpdateLorebook={handleUpdateLorebook} 
+      />
     </div>
   );
 }
