@@ -2401,7 +2401,20 @@ export default function App() {
   useEffect(() => {
     if (isOfflineMode) {
       const checkLocalUser = () => {
-        const cached = localStorage.getItem("inkwell_guest_user");
+        let cached = localStorage.getItem("inkwell_guest_user");
+        const explicitlySignedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
+        
+        if (!cached && !explicitlySignedOut) {
+          // Auto-sign in as guest on first cold-load for seamless entry!
+          const guestUser = {
+            uid: "local_scribe_guest",
+            displayName: "Local Scribe",
+            isAnonymous: true,
+          };
+          localStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
+          cached = JSON.stringify(guestUser);
+        }
+        
         if (cached) {
           try {
             setUser(JSON.parse(cached));
@@ -2420,8 +2433,22 @@ export default function App() {
     }
 
     return auth.onAuthStateChanged((u) => {
-      setUser(u);
-      if (!u) setSelectedStory(null);
+      const explicitlySignedOut = sessionStorage.getItem("inkwell_explicit_sign_out");
+      if (u) {
+        setUser(u);
+      } else if (!explicitlySignedOut) {
+        // Auto sign-in anonymously for an unimpeded live preview experience
+        import("./lib/firebase").then(({ signInGuest }) => {
+          signInGuest().then((guest) => {
+            setUser(guest);
+          }).catch((err) => {
+            console.error("Auto guest sign-in failed:", err);
+          });
+        });
+      } else {
+        setUser(null);
+        setSelectedStory(null);
+      }
     });
   }, []);
 

@@ -23,6 +23,7 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 export async function signIn() {
+  sessionStorage.removeItem("inkwell_explicit_sign_out");
   if (isOfflineMode) {
     const guestUser = {
       uid: "local_scribe_guest",
@@ -50,6 +51,7 @@ export async function signIn() {
 }
 
 export async function signOut() {
+  sessionStorage.setItem("inkwell_explicit_sign_out", "true");
   if (isOfflineMode) {
     localStorage.removeItem("inkwell_guest_user");
     window.dispatchEvent(new Event("storage_auth_changed"));
@@ -59,6 +61,7 @@ export async function signOut() {
 }
 
 export async function signInGuest() {
+  sessionStorage.removeItem("inkwell_explicit_sign_out");
   if (isOfflineMode) {
     const guestUser = {
       uid: "local_scribe_guest",
