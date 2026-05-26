@@ -2415,8 +2415,18 @@ export default function App() {
 
   const [isLoreOpen, setIsLoreOpen] = useState(false);
   const [lorebook, setLorebook] = useState<LoreEntry[]>(() => {
-    const saved = localStorage.getItem('inkwell_lorebook');
-    return saved ? JSON.parse(saved) : [
+    try {
+      const saved = localStorage.getItem('inkwell_lorebook');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse inkwell_lorebook", e);
+    }
+    return [
       { id: 'mock-1', keyword: 'Brian', description: 'Lead driver. Wears red gloves, calm under pressure.' },
       { id: 'mock-2', keyword: 'Tarmac', description: 'Extremely hot, high deg, melting the soft compound tires.' }
     ];
@@ -2528,15 +2538,33 @@ export default function App() {
     }
 
     // Remove orderBy to avoid index requirement errors
-    const q = query(
-      collection(db, "stories"),
-      where("authorId", "==", user.uid)
-    );
-    return onSnapshot(q, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Story));
-      // Sort in memory instead
-      setStories(data.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)));
-    });
+    try {
+      const q = query(
+        collection(db, "stories"),
+        where("authorId", "==", user.uid)
+      );
+      return onSnapshot(q, (snap) => {
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Story));
+        // Sort in memory instead
+        setStories(data.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)));
+      }, (err) => {
+        console.warn("Firestore subscription failed. Falling back to offline local manuscript archive seamlessly.", err);
+        const stored = localStorage.getItem("inkwell_stories");
+        if (stored) {
+          try {
+            const list = JSON.parse(stored) as Story[];
+            const filtered = list.filter(s => s.authorId === user.uid);
+            setStories(filtered.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)));
+          } catch (e) {
+            console.error("Failed to parse local stories fallback", e);
+          }
+        } else {
+          setStories([]);
+        }
+      });
+    } catch (e) {
+      console.error("Firestore setup error", e);
+    }
   }, [user]);
 
   const handleCreate = async (title: string, genre: string, description: string = "", initialChapterContent: string = "") => {
