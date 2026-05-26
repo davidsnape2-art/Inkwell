@@ -2407,7 +2407,7 @@ function NewStoryModal({ isOpen, onClose, onCreate }: { isOpen: boolean, onClose
   );
 }
 
-export default function App() {
+function InkwellApp() {
   const [user, setUser] = useState<any | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
@@ -2686,5 +2686,73 @@ export default function App() {
         onUpdateLorebook={handleUpdateLorebook} 
       />
     </div>
+  );
+}
+
+// --- Class Level Error Boundary to isolate rendering / load failures ---
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught rendering failure", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-paper flex flex-col items-center justify-center p-8 text-center select-text font-sans">
+          <div className="max-w-xl bg-white border border-border-subtle p-10 rounded-3xl shadow-xl">
+            <BookOpen className="w-12 h-12 text-sage mx-auto mb-6" />
+            <h1 className="font-serif text-3xl text-earth mb-3 leading-tight">Something went wrong</h1>
+            <p className="text-sm text-earth/65 mb-6">
+              Inkwell ran into an unexpected rendering error. This could be due to a browser permission constraint or a corrupted state.
+            </p>
+            <div className="bg-paper border border-border-subtle rounded-xl p-5 mb-6 text-left font-mono text-xs text-red-600/90 overflow-auto max-h-[160px] whitespace-pre-wrap">
+              {this.state.error?.toString()}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-6 py-3 bg-earth text-white rounded-xl text-xs uppercase tracking-wider font-bold hover:bg-sage transition-all shadow-md cursor-pointer"
+              >
+                Reload Page
+              </button>
+              <button 
+                onClick={() => {
+                  try {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.reload();
+                  } catch (_) {}
+                }}
+                className="px-6 py-3 border border-dashed border-earth/20 text-earth hover:border-earth/40 rounded-xl text-xs uppercase tracking-wider font-bold transition-all cursor-pointer"
+              >
+                Clear Data & Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <InkwellApp />
+    </ErrorBoundary>
   );
 }
