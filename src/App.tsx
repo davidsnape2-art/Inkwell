@@ -874,7 +874,10 @@ function Editor({ story, onBack }: { story: Story, onBack: () => void }) {
   const [isLoreOpen, setIsLoreOpen] = useState(false);
   const [lorebook, setLorebook] = useState<LoreEntry[]>(() => {
     const saved = localStorage.getItem('inkwell_lorebook');
-    return saved ? JSON.parse(saved) : [];
+    return saved ? JSON.parse(saved) : [
+      { id: 'mock-1', keyword: 'Brian', description: 'Lead driver. Wears red gloves, calm under pressure.' },
+      { id: 'mock-2', keyword: 'Tarmac', description: 'Extremely hot, high deg, melting the soft compound tires.' }
+    ];
   });
 
   const handleUpdateLorebook = (updated: LoreEntry[]) => {
