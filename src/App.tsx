@@ -618,7 +618,38 @@ function Landing() {
   );
 }
 
-function Dashboard({ stories, onCreate, onSelect }: { stories: Story[], onCreate: () => void, onSelect: (s: Story) => void }) {
+function Dashboard({ 
+  stories, 
+  onCreate, 
+  onSelect,
+  onInstantCreate
+}: { 
+  stories: Story[], 
+  onCreate: () => void, 
+  onSelect: (s: Story) => void,
+  onInstantCreate: (title: string, genre: string, desc: string, initContent: string) => Promise<void>
+}) {
+  const blueprints = [
+    {
+      title: "The Whispering Oak",
+      genre: "Epic Fantasy",
+      description: "An ancient forest holds secrets to a forgotten age, and Elara must carry the catalyst to safety.",
+      initContent: "The wind rustled through the ancient branches of the oak tree, carrying with it the scent of fresh rain and old magic. Elara gripped the silver vial tightly in her hand, feeling the warm pulse of the catalyst within. They were coming for her, she knew, but she had to survive."
+    },
+    {
+      title: "Neon Pulse",
+      genre: "Sci-Fi / Cyberpunk",
+      description: "Under the towering arches of Neo-Kowloon, a cybernetic courier uncovers an encrypted drive containing the key to the city’s sub-grid controls.",
+      initContent: "Rain fell in sheets of heavy, radioactive grey, slicking the alloy streets of Neo-Kowloon in a persistent, shimmering mirror. Jaxon woven his mag-cycle through the gridlocked cargo haulers, his mechanical eyes locked onto the green tracking node glowing in his peripheral interface."
+    },
+    {
+      title: "A Shadow in Paris",
+      genre: "Historical Mystery",
+      description: "In the foggy streets of 1890 Paris, an eccentric detective follows a trail of clockwork keys left by an elusive thief.",
+      initContent: "Gaslights sputtered under the heavy fog that rolled off the Seine. Inspector Robert pulled his heavy wool coat tighter against the chill, his leather-gloved fingers brushing the small, brass gear tucked into his pocket. It was the third clockwork key this week, left in plain sight."
+    }
+  ];
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
@@ -628,17 +659,60 @@ function Dashboard({ stories, onCreate, onSelect }: { stories: Story[], onCreate
         </div>
         <button
           onClick={onCreate}
-          className="flex items-center gap-2 px-8 py-4 bg-sage text-white rounded-xl font-semibold hover:shadow-xl hover:shadow-sage/20 transition-all"
+          className="flex items-center gap-2 px-8 py-4 bg-sage text-white rounded-xl font-semibold hover:shadow-xl hover:shadow-sage/20 transition-all cursor-pointer"
         >
           <PenTool className="w-4 h-4" />
-          Create New Manuscript
+          Create Custom Manuscript
         </button>
       </div>
 
       {stories.length === 0 ? (
-        <div className="border border-dashed border-border-subtle rounded-3xl p-24 text-center bg-white/50">
-          <BookOpen className="w-12 h-12 text-earth/10 mx-auto mb-4" />
-          <p className="text-earth/40 font-medium">Your archive is empty. Begin a new journey.</p>
+        <div className="space-y-12">
+          <div className="border border-dashed border-border-subtle rounded-3xl p-16 text-center bg-white/50">
+            <BookOpen className="w-10 h-10 text-earth/20 mx-auto mb-4" />
+            <h4 className="font-serif text-2xl text-earth mb-2">Your Archive is Empty</h4>
+            <p className="text-earth/60 max-w-md mx-auto text-sm leading-relaxed font-sans mb-6">
+              Establish a custom workspace from scratch, or kickstart your imagination with one of our curated high-concept story blueprints below.
+            </p>
+            <button
+              onClick={onCreate}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-earth text-white rounded-xl font-medium hover:bg-sage transition-all text-xs uppercase tracking-wider cursor-pointer shadow-md"
+            >
+              <PenTool className="w-3.5 h-3.5" />
+              Create Custom Manuscript
+            </button>
+          </div>
+
+          <div>
+            <span className="text-[10px] uppercase font-bold text-sage tracking-[2px] mb-6 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Start Writing Instantly from a Blueprint
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-4">
+              {blueprints.map((bp) => (
+                <div
+                  key={bp.title}
+                  onClick={() => onInstantCreate(bp.title, bp.genre, bp.description, bp.initContent)}
+                  className="group cursor-pointer bg-white border border-border-subtle hover:border-sage/40 rounded-2xl p-8 hover:shadow-xl hover:shadow-earth/[0.03] transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[9px] uppercase tracking-[1.5px] text-sage font-extrabold mb-4 block">
+                      {bp.genre}
+                    </span>
+                    <h4 className="font-serif text-2xl mb-3 text-earth group-hover:text-sage transition-colors leading-tight">
+                      {bp.title}
+                    </h4>
+                    <p className="text-ink/65 text-xs leading-relaxed mb-6 font-serif italic line-clamp-4">
+                      {bp.description}
+                    </p>
+                  </div>
+                  <div className="pt-4 border-t border-border-subtle/40 flex justify-between items-center text-[10px] uppercase font-bold text-earth/50 group-hover:text-sage transition-colors">
+                    <span>Draft Story</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-earth/20 group-hover:translate-x-1 group-hover:text-sage transition-all" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
@@ -2227,12 +2301,12 @@ export default function App() {
     });
   }, [user]);
 
-  const handleCreate = async (title: string, genre: string) => {
+  const handleCreate = async (title: string, genre: string, description: string = "", initialChapterContent: string = "") => {
     if (!user) return;
     try {
       const newStoryData = {
         title: title.trim(),
-        description: "",
+        description: description || "",
         genre: genre || "General Fiction",
         authorId: user.uid,
         createdAt: isOfflineMode ? { seconds: Date.now() / 1000 } : serverTimestamp(),
@@ -2247,10 +2321,40 @@ export default function App() {
         const finalStory = { ...newStoryData, id };
         list.push(finalStory);
         localStorage.setItem("inkwell_stories", JSON.stringify(list));
+
+        if (initialChapterContent) {
+          const starterChapter = {
+            id: "chapter_" + Math.random().toString(36).substring(2, 9),
+            storyId: id,
+            title: "Chapter 1: The Gathering Storm",
+            content: initialChapterContent,
+            order: 1,
+            authorId: user.uid,
+            createdAt: { seconds: Date.now() / 1000 },
+            updatedAt: { seconds: Date.now() / 1000 },
+          };
+          const chaptersStored = localStorage.getItem("inkwell_chapters");
+          const chaptersList = chaptersStored ? JSON.parse(chaptersStored) : [];
+          chaptersList.push(starterChapter);
+          localStorage.setItem("inkwell_chapters", JSON.stringify(chaptersList));
+        }
+
         window.dispatchEvent(new Event("inkwell_db_changed"));
       } else {
         const docRef = await addDoc(collection(db, "stories"), newStoryData);
         id = docRef.id;
+
+        if (initialChapterContent) {
+          await addDoc(collection(db, `stories/${id}/chapters`), {
+            storyId: id,
+            title: "Chapter 1: The Gathering Storm",
+            content: initialChapterContent,
+            order: 1,
+            authorId: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
       }
       
       // Update local state briefly for a smooth transition
@@ -2286,7 +2390,7 @@ export default function App() {
             handleUpdateLorebook={handleUpdateLorebook}
           />
         ) : (
-          <Dashboard stories={stories} onCreate={() => setIsModalOpen(true)} onSelect={setSelectedStory} />
+          <Dashboard stories={stories} onCreate={() => setIsModalOpen(true)} onSelect={setSelectedStory} onInstantCreate={handleCreate} />
         )}
       </main>
 
