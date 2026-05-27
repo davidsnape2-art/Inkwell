@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -253,19 +254,24 @@ ${selectedText}
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Intelligent fallback: Serve static files in production ONLY if the 'dist' bundle is actually built.
+  // Otherwise, fall back dynamically to Vite's development middleware to enable on-the-fly compilation.
+  const distPath = path.join(process.cwd(), "dist");
+  const isDistBuilt = fs.existsSync(path.join(distPath, "index.html"));
+  
+  if (process.env.NODE_ENV === "production" && isDistBuilt) {
+    console.log("Serving build assets statically from /dist in Production Mode.");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
+    console.log("Initializing local live development pipeline using Vite dev server middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
