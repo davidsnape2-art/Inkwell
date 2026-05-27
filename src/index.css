@@ -91,3 +91,23 @@
   height: 0;
   pointer-events: none;
 }
+
+/* Ensure TipTap BubbleMenu (Tippy.js) remains fully interactive, visible, and placed above other layers */
+.tippy-box {
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+  transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.tippy-box[data-state="hidden"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.tippy-box[data-state="visible"] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+

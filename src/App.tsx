@@ -1840,7 +1840,11 @@ Chapter Notes: ${activeChapter.notes || "No draft notes available"}
             {editor && (
               <BubbleMenu
                 editor={editor}
-                options={{ placement: "top" }}
+                options={{
+                  placement: "top",
+                  strategy: "fixed",
+                }}
+                appendTo={() => document.body}
               >
                 <div className="flex bg-earth/95 backdrop-blur-md rounded-xl p-1.5 shadow-xl border border-earth/20 gap-1">
                   <button
