@@ -15,6 +15,10 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { KeyboardTriggerExtension } from "./lib/KeyboardTriggerExtension";
 import { LorebookDrawer } from "./components/LorebookDrawer";
+import { safeLocalStorage, safeSessionStorage } from "./lib/storage";
+
+const localStorage = safeLocalStorage;
+const sessionStorage = safeSessionStorage;
 
 // --- Components ---
 

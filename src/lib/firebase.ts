@@ -1,6 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously } from "firebase/auth";
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
+import { safeLocalStorage, safeSessionStorage } from "./storage";
+
 const firebaseConfig = {
   apiKey: "",
   authDomain: "",
@@ -23,14 +25,14 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 export async function signIn() {
-  sessionStorage.removeItem("inkwell_explicit_sign_out");
+  safeSessionStorage.removeItem("inkwell_explicit_sign_out");
   if (isOfflineMode) {
     const guestUser = {
       uid: "local_scribe_guest",
       displayName: "Local Scribe",
       isAnonymous: true,
     };
-    localStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
+    safeLocalStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
     window.dispatchEvent(new Event("storage_auth_changed"));
     return guestUser;
   }
@@ -51,9 +53,9 @@ export async function signIn() {
 }
 
 export async function signOut() {
-  sessionStorage.setItem("inkwell_explicit_sign_out", "true");
+  safeSessionStorage.setItem("inkwell_explicit_sign_out", "true");
   if (isOfflineMode) {
-    localStorage.removeItem("inkwell_guest_user");
+    safeLocalStorage.removeItem("inkwell_guest_user");
     window.dispatchEvent(new Event("storage_auth_changed"));
     return;
   }
@@ -61,14 +63,14 @@ export async function signOut() {
 }
 
 export async function signInGuest() {
-  sessionStorage.removeItem("inkwell_explicit_sign_out");
+  safeSessionStorage.removeItem("inkwell_explicit_sign_out");
   if (isOfflineMode) {
     const guestUser = {
       uid: "local_scribe_guest",
       displayName: "Local Scribe",
       isAnonymous: true,
     };
-    localStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
+    safeLocalStorage.setItem("inkwell_guest_user", JSON.stringify(guestUser));
     window.dispatchEvent(new Event("storage_auth_changed"));
     return guestUser;
   }
